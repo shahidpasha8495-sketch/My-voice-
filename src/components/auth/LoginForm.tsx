@@ -1,16 +1,27 @@
-import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Loader2,
+  Lock,
+  Mail,
+  Sparkles,
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { loginSchema } from '../../utils/validation';
 
 export interface LoginFormProps {
   onSubmit: (email: string, password: string) => Promise<boolean>;
+  onGuestLogin?: () => void;
   error: string | null;
   onClearError: () => void;
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({
   onSubmit,
+  onGuestLogin,
   error,
   onClearError,
 }) => {
@@ -141,7 +152,36 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         )}
       </button>
 
-      <p className="text-center text-xs text-[#A1A1B8] pt-2">
+      {onGuestLogin && (
+        <>
+          <div className="relative flex items-center py-1">
+            <div className="flex-grow border-t border-white/[0.08]" />
+            <span className="mx-3 shrink-0 text-[11px] font-medium uppercase tracking-wider text-[#72758E]">
+              or instant access
+            </span>
+            <div className="flex-grow border-t border-white/[0.08]" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              onClearError();
+              setValidationError(null);
+              onGuestLogin();
+            }}
+            data-testid="guest-login-button"
+            className="group flex w-full items-center justify-center gap-2 rounded-2xl border border-[#22D3EE]/35 bg-[#101124]/90 px-5 py-3 text-sm font-bold text-[#F8FAFC] hover:border-[#22D3EE] hover:bg-[#22D3EE]/10 hover:shadow-glow-secondary transition-all"
+          >
+            <Sparkles className="h-4 w-4 text-[#22D3EE] transition-transform group-hover:rotate-12" />
+            <span>Continue as Guest</span>
+            <span className="rounded-full bg-[#22D3EE]/15 px-2 py-0.5 text-[10px] font-semibold text-[#22D3EE]">
+              No Login Needed
+            </span>
+          </button>
+        </>
+      )}
+
+      <p className="text-center text-xs text-[#A1A1B8] pt-1">
         Don&apos;t have an account?{' '}
         <Link
           to="/signup"

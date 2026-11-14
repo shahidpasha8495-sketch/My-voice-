@@ -202,10 +202,12 @@ describe('Unit: PLUSH AI Characters, Gallery, Voice Studio & Themes', () => {
       "Let's try that again."
     );
 
+    const onGuestLogin = vi.fn();
     render(
       <MemoryRouter>
         <LoginForm
           onSubmit={vi.fn().mockResolvedValue(true)}
+          onGuestLogin={onGuestLogin}
           error={null}
           onClearError={vi.fn()}
         />
@@ -216,6 +218,9 @@ describe('Unit: PLUSH AI Characters, Gallery, Voice Studio & Themes', () => {
     expect(passwordInput.type).toBe('password');
     fireEvent.click(screen.getByRole('button', { name: /Show password/i }));
     expect(passwordInput.type).toBe('text');
+
+    fireEvent.click(screen.getByTestId('guest-login-button'));
+    expect(onGuestLogin).toHaveBeenCalledTimes(1);
   });
 
   it('renders CompanionPanel right contextual dock with active plush companion and quick switcher', () => {

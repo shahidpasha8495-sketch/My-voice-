@@ -13,6 +13,10 @@ import { isSupabaseConfigured, supabase } from '../services/supabase';
 import type { SupportedLanguage, UserProfile } from '../types';
 import { isSupportedLanguage, loginSchema, signupSchema } from '../utils/validation';
 
+export const GUEST_ACCESS_TOKEN = 'guest-session-token';
+export const GUEST_USER_ID = '00000000-0000-4000-8000-000000000000';
+const GUEST_STORAGE_KEY = 'myvoice.guest_session';
+
 export interface AuthContextValue {
   user: User | null;
   session: Session | null;
@@ -21,7 +25,9 @@ export interface AuthContextValue {
   loading: boolean;
   error: string | null;
   isAuthenticated: boolean;
+  isGuest: boolean;
   signIn: (email: string, password: string) => Promise<boolean>;
+  signInAsGuest: () => void;
   signUp: (params: {
     displayName: string;
     email: string;
@@ -37,6 +43,78 @@ export interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function buildGuestAuthObjects(savedProfile?: Partial<UserProfile>): {
+  user: User;
+  session: Session;
+  profile: UserProfile;
+} {
+  const nowIso = new Date().toISOString();
+  const displayName = savedProfile?.display_name || 'Guest Explorer';
+  const preferredLanguage: SupportedLanguage = isSupportedLanguage(
+    savedProfile?.preferred_language
+  )
+    ? savedProfile.preferred_language
+    : 'en-US';
+
+  const guestUser: User = {
+    id: GUEST_USER_ID,
+    aud: 'authenticated',
+    role: 'authenticated',
+    email: 'guest@myvoice.app',
+    user_metadata: {
+      display_name: displayName,
+      preferred_language: preferredLanguage,
+      is_guest: true,
+    },
+    app_metadata: { provider: 'guest' },
+    created_at: nowIso,
+  };
+
+  const guestSession: Session = {
+    access_token: GUEST_ACCESS_TOKEN,
+    refresh_token: 'guest-refresh-token',
+    expires_in: 86400,
+    expires_at: Math.floor(Date.now() / 1000) + 86400,
+    token_type: 'bearer',
+    user: guestUser,
+  };
+
+  const guestProfile: UserProfile = {
+    id: GUEST_USER_ID,
+    email: 'guest@myvoice.app',
+    display_name: displayName,
+    preferred_language: preferredLanguage,
+    created_at: savedProfile?.created_at || nowIso,
+    updated_at: nowIso,
+  };
+
+  return { user: guestUser, session: guestSession, profile: guestProfile };
+}
+
+function loadSavedGuestProfile(): Partial<UserProfile> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage?.getItem(GUEST_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Partial<UserProfile>;
+  } catch {
+    return null;
+  }
+}
+
+function saveGuestProfile(profile: UserProfile | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!profile) {
+      window.sessionStorage?.removeItem(GUEST_STORAGE_KEY);
+    } else {
+      window.sessionStorage?.setItem(GUEST_STORAGE_KEY, JSON.stringify(profile));
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 async function fetchOrCreateUserProfile(authUser: User): Promise<UserProfile> {
   const metaName =
@@ -120,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isGuest, setIsGuest] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,6 +206,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     async function initSession() {
+      // Check if an active Guest session exists in sessionStorage
+      const savedGuest = loadSavedGuestProfile();
+      if (savedGuest) {
+        const guestAuth = buildGuestAuthObjects(savedGuest);
+        if (mounted) {
+          setIsGuest(true);
+          setSession(guestAuth.session);
+          setUser(guestAuth.user);
+          setProfile(guestAuth.profile);
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         const { data, error: sessionError } = await supabase.auth.getSession();
         if (!mounted) return;
@@ -139,6 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        setIsGuest(false);
         setSession(data.session);
         setUser(data.session.user);
         const loadedProfile = await fetchOrCreateUserProfile(data.session.user);
@@ -158,6 +252,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
         if (!mounted) return;
+        if (!nextSession && loadSavedGuestProfile()) {
+          return;
+        }
+        setIsGuest(false);
         setSession(nextSession);
         setUser(nextSession?.user ?? null);
 
@@ -200,6 +298,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
+      saveGuestProfile(null);
+      setIsGuest(false);
       setSession(data.session);
       setUser(data.user);
       const userProfile = await fetchOrCreateUserProfile(data.user);
@@ -209,6 +309,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError('Unable to connect. Please try again.');
       return false;
     }
+  }, []);
+
+  const signInAsGuest = useCallback(() => {
+    setError(null);
+    const guestAuth = buildGuestAuthObjects();
+    saveGuestProfile(guestAuth.profile);
+    setIsGuest(true);
+    setSession(guestAuth.session);
+    setUser(guestAuth.user);
+    setProfile(guestAuth.profile);
   }, []);
 
   const signUp = useCallback(
@@ -250,6 +360,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return false;
         }
 
+        saveGuestProfile(null);
+        setIsGuest(false);
+
         if (data.session) {
           setSession(data.session);
           setUser(data.user);
@@ -280,6 +393,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async (): Promise<void> => {
     setError(null);
+    saveGuestProfile(null);
+    setIsGuest(false);
     try {
       await supabase.auth.signOut();
     } finally {
@@ -308,7 +423,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setProfile(nextProfile);
 
-      if (!isSupabaseConfigured()) {
+      if (isGuest || user.id === GUEST_USER_ID || !isSupabaseConfigured()) {
+        if (isGuest || user.id === GUEST_USER_ID) {
+          saveGuestProfile(nextProfile);
+        }
         return true;
       }
 
@@ -331,7 +449,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
     },
-    [user, profile]
+    [user, profile, isGuest]
   );
 
   const clearError = useCallback(() => {
@@ -347,13 +465,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       isAuthenticated: Boolean(user && session),
+      isGuest,
       signIn,
+      signInAsGuest,
       signUp,
       signOut,
       updateProfile,
       clearError,
     }),
-    [user, session, profile, loading, error, signIn, signUp, signOut, updateProfile, clearError]
+    [
+      user,
+      session,
+      profile,
+      loading,
+      error,
+      isGuest,
+      signIn,
+      signInAsGuest,
+      signUp,
+      signOut,
+      updateProfile,
+      clearError,
+    ]
   );
 
   return React.createElement(AuthContext.Provider, { value }, children);

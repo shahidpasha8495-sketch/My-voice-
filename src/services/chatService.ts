@@ -1,5 +1,7 @@
+import { GUEST_ACCESS_TOKEN } from '../hooks/useAuth';
 import type { ChatRequestPayload, ChatResponsePayload, HealthResponse } from '../types';
 import { validateMessageInput } from '../utils/validation';
+import { appendGuestMessages } from './conversationService';
 import { getAccessToken } from './supabase';
 
 export class ChatServiceError extends Error {
@@ -94,6 +96,13 @@ export async function sendChatMessage(
       response.status || 500,
       body?.code || 'GENERATION_FAILED'
     );
+  }
+
+  if (token === GUEST_ACCESS_TOKEN) {
+    appendGuestMessages(payload.conversationId, [
+      body.userMessage,
+      body.assistantMessage,
+    ]);
   }
 
   return {

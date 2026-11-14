@@ -1,3 +1,4 @@
+import { GUEST_ACCESS_TOKEN, GUEST_USER_ID } from '../hooks/useAuth';
 import type {
   Conversation,
   ConversationDetailResponse,
@@ -6,6 +7,72 @@ import type {
   SupportedLanguage,
 } from '../types';
 import { getAccessToken, supabase } from './supabase';
+
+const GUEST_CONVERSATIONS_KEY = 'myvoice.guest_conversations';
+const GUEST_MESSAGES_KEY = 'myvoice.guest_messages';
+
+function generateUuidV4(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export function getGuestConversations(): Conversation[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(GUEST_CONVERSATIONS_KEY);
+    return raw ? (JSON.parse(raw) as Conversation[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveGuestConversations(list: Conversation[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(GUEST_CONVERSATIONS_KEY, JSON.stringify(list));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function getGuestMessagesMap(): Record<string, Message[]> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(GUEST_MESSAGES_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, Message[]>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function appendGuestMessages(
+  conversationId: string,
+  newMessages: Message[]
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const map = getGuestMessagesMap();
+    const existing = map[conversationId] || [];
+    map[conversationId] = [...existing, ...newMessages];
+    localStorage.setItem(GUEST_MESSAGES_KEY, JSON.stringify(map));
+
+    // Also update conversation updated_at
+    const convs = getGuestConversations();
+    const idx = convs.findIndex((c) => c.id === conversationId);
+    if (idx !== -1) {
+      convs[idx].updated_at = new Date().toISOString();
+      saveGuestConversations(convs);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 export class ConversationServiceError extends Error {
   public readonly statusCode: number;
@@ -29,11 +96,17 @@ async function resolveToken(explicitToken?: string | null): Promise<string> {
 }
 
 /**
- * Retrieves all conversations belonging to the authenticated user,
+ * Retrieves all conversations belonging to the authenticated user (or Guest session),
  * ordered by most recent activity first (updated_at DESC).
  */
 export async function listConversations(accessToken?: string | null): Promise<Conversation[]> {
   const token = await resolveToken(accessToken);
+
+  if (token === GUEST_ACCESS_TOKEN) {
+    return getGuestConversations().sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+  }
 
   try {
     const response = await fetch('/api/conversations', {
@@ -82,6 +155,15 @@ export async function getConversationWithMessages(
   accessToken?: string | null
 ): Promise<{ conversation: Conversation; messages: Message[] }> {
   const token = await resolveToken(accessToken);
+
+  if (token === GUEST_ACCESS_TOKEN) {
+    const conv = getGuestConversations().find((c) => c.id === conversationId);
+    if (!conv) {
+      throw new ConversationServiceError('Conversation not found.', 404);
+    }
+    const messages = getGuestMessagesMap()[conversationId] || [];
+    return { conversation: conv, messages };
+  }
 
   try {
     const response = await fetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
@@ -147,7 +229,7 @@ export async function getConversationWithMessages(
 }
 
 /**
- * Creates a new conversation in Supabase.
+ * Creates a new conversation in Supabase (or in local storage for Guest sessions).
  */
 export async function createNewConversation(params: {
   userId: string;
@@ -157,6 +239,21 @@ export async function createNewConversation(params: {
 }): Promise<Conversation> {
   const { userId, title, language, accessToken } = params;
   const token = await resolveToken(accessToken);
+
+  if (token === GUEST_ACCESS_TOKEN) {
+    const nowIso = new Date().toISOString();
+    const guestConv: Conversation = {
+      id: generateUuidV4(),
+      user_id: userId || GUEST_USER_ID,
+      title,
+      language,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+    const existing = getGuestConversations();
+    saveGuestConversations([guestConv, ...existing]);
+    return guestConv;
+  }
 
   try {
     const response = await fetch('/api/conversations', {
@@ -207,13 +304,28 @@ export async function createNewConversation(params: {
 }
 
 /**
- * Deletes an owned conversation and its associated messages (via ON DELETE CASCADE).
+ * Deletes an owned conversation and its associated messages.
  */
 export async function removeConversation(
   conversationId: string,
   accessToken?: string | null
 ): Promise<void> {
   const token = await resolveToken(accessToken);
+
+  if (token === GUEST_ACCESS_TOKEN) {
+    const filtered = getGuestConversations().filter((c) => c.id !== conversationId);
+    saveGuestConversations(filtered);
+    const msgMap = getGuestMessagesMap();
+    delete msgMap[conversationId];
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(GUEST_MESSAGES_KEY, JSON.stringify(msgMap));
+      } catch {
+        // ignore storage errors
+      }
+    }
+    return;
+  }
 
   const response = await fetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'DELETE',

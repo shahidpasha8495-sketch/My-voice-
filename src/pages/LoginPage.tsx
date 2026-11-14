@@ -16,7 +16,14 @@ const AMBIENT_PARTICLES = [
 ];
 
 export const LoginPage: React.FC = () => {
-  const { signIn, error, clearError, isAuthenticated, loading } = useAuth();
+  const {
+    signIn,
+    signInAsGuest,
+    error,
+    clearError,
+    isAuthenticated,
+    loading,
+  } = useAuth();
   const navigate = useNavigate();
   const prefersReducedMotion = useReducedMotion();
 
@@ -30,6 +37,11 @@ export const LoginPage: React.FC = () => {
       navigate('/', { replace: true });
     }
     return ok;
+  };
+
+  const handleGuestAccess = () => {
+    signInAsGuest();
+    navigate('/', { replace: true });
   };
 
   return (
@@ -141,6 +153,7 @@ export const LoginPage: React.FC = () => {
         <div className="rounded-3xl border border-white/[0.08] bg-[#191B30]/90 p-6 sm:p-7 shadow-plush-float backdrop-blur-2xl transition-all hover:border-[#8B5CF6]/30">
           <LoginForm
             onSubmit={handleLogin}
+            onGuestLogin={handleGuestAccess}
             error={error}
             onClearError={clearError}
           />
