@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   MyVoice Plush Intelligence Design System Tokens
+   ============================================================================ */
+:root {
+  --bg-primary: #090914;
+  --bg-secondary: #101124;
+  --bg-sidebar: #111426;
+  --bg-card: #191B30;
+  --color-primary: #8B5CF6;
+  --color-violet: #A855F7;
+  --color-cyan: #22D3EE;
+  --color-pink: #F472B6;
+  --color-mint: #34D399;
+  --color-text: #F8FAFC;
+  --color-text-secondary: #A1A1B8;
+  --color-muted: #72758E;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-success: #34D399;
+  --color-error: #F87171;
+}
+
+html.dark {
+  --bg-primary: #090914;
+  --bg-secondary: #101124;
+  --bg-sidebar: #111426;
+  --bg-card: #191B30;
+  --color-primary: #8B5CF6;
+  --color-violet: #A855F7;
+  --color-cyan: #22D3EE;
+  --color-pink: #F472B6;
+  --color-mint: #34D399;
+  --color-text: #F8FAFC;
+  --color-text-secondary: #A1A1B8;
+  --color-muted: #72758E;
+  --color-border: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+
+html.light {
+  --bg-primary: #FFFDF9;
+  --bg-secondary: #F5F0FF;
+  --bg-sidebar: #F5F0FF;
+  --bg-card: rgba(255, 255, 255, 0.88);
+  --color-primary: #8B5CF6;
+  --color-violet: #A855F7;
+  --color-cyan: #06B6D4;
+  --color-pink: #F472B6;
+  --color-mint: #10B981;
+  --color-text: #1E1B4B;
+  --color-text-secondary: #475569;
+  --color-muted: #64748B;
+  --color-border: rgba(139, 92, 246, 0.16);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: var(--color-text);
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  transition: background-color 0.28s ease, color 0.28s ease;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: 'Outfit', 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.28);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.55);
+}
+
+/* Accessible focus ring */
+:focus-visible {
+  outline: 2px solid #8B5CF6;
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
