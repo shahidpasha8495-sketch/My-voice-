@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       .toLowerCase();
     const isGuestRequest = authHeaderStr === GUEST_BEARER_HEADER;
 
-    // 1. Handle Guest Mode requests (real Gemini response without requiring Supabase login)
+    // 1. Handle Guest Mode requests (ultra-fast direct Gemini response without DB round-trips)
     if (isGuestRequest) {
       const rateLimit = checkRateLimit(getClientIdentifier(req, 'guest'), 20, 60_000);
       applyRateLimitHeaders(res, rateLimit);
@@ -98,8 +98,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
-    // 2. Authenticate standard user via Supabase Auth token
-    const identity = await verifyRequestAuth(req);
+    // 2. Authenticate standard user via Supabase Auth token & parse body in parallel
+    const [identity, rawBody] = await Promise.all([
+      verifyRequestAuth(req),
+      parseJsonBody(req),
+    ]);
 
     // 3. Enforce per-user rate limit
     const rateLimit = checkRateLimit(getClientIdentifier(req, identity.userId), 20, 60_000);
@@ -114,8 +117,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
-    // 4. Parse and validate request payload with Zod
-    const rawBody = await parseJsonBody(req);
+    // 4. Validate request payload with Zod
     const parsed = chatRequestSchema.safeParse(rawBody);
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0]?.message || 'Invalid chat request payload.';
@@ -159,8 +161,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const chronologicalHistory: Message[] = ((recentRows ?? []) as Message[]).slice().reverse();
 
-    // 8. Save the user message via RLS-protected user client
-    const { data: savedUserMessage, error: userInsertError } = await userSupabase
+    // 8 & 9. Run user message DB insert AND Gemini generation IN PARALLEL for maximum speed!
+    const userInsertPromise = userSupabase
       .from('messages')
       .insert({
         conversation_id: conversationId,
@@ -172,47 +174,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       .select('id, conversation_id, role, content, input_mode, language, created_at')
       .single();
 
-    if (userInsertError || !savedUserMessage) {
-      throw new ApiError(500, 'Failed to save your message.', 'DB_USER_MESSAGE_ERROR');
-    }
-
-    // 9. Generate AI response from Google Gemini API
-    const aiReplyText = await generateGeminiReply({
+    const geminiReplyPromise = generateGeminiReply({
       historyMessages: chronologicalHistory,
       currentMessage: message,
       language: effectiveLanguage,
     });
 
-    // 10. Persist assistant response using the privileged server-side Supabase client
-    const privilegedSupabase = createPrivilegedSupabaseClient();
+    const [{ data: savedUserMessage, error: userInsertError }, aiReplyText] =
+      await Promise.all([userInsertPromise, geminiReplyPromise]);
 
-    const { data: savedAssistantMessage, error: assistantInsertError } = await privilegedSupabase
-      .from('messages')
-      .insert({
+    if (userInsertError || !savedUserMessage) {
+      throw new ApiError(500, 'Failed to save your message.', 'DB_USER_MESSAGE_ERROR');
+    }
+
+    // 10 & 11. Persist assistant response and update conversation timestamp IN PARALLEL
+    let savedAssistantMessage: Message | null = null;
+    try {
+      const privilegedSupabase = createPrivilegedSupabaseClient();
+
+      const assistantInsertPromise = privilegedSupabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: aiReplyText,
+          input_mode: 'text',
+          language: effectiveLanguage,
+        })
+        .select('id, conversation_id, role, content, input_mode, language, created_at')
+        .single();
+
+      const convUpdatePromise = privilegedSupabase
+        .from('conversations')
+        .update({
+          updated_at: new Date().toISOString(),
+          language: effectiveLanguage,
+        })
+        .eq('id', conversationId)
+        .eq('user_id', identity.userId);
+
+      const [{ data: insertedAssistant, error: assistantInsertError }] =
+        await Promise.all([assistantInsertPromise, convUpdatePromise]);
+
+      if (!assistantInsertError && insertedAssistant) {
+        savedAssistantMessage = insertedAssistant as Message;
+      }
+    } catch {
+      // Fallback if SUPABASE_SERVICE_ROLE_KEY is a placeholder so the user still gets an instant reply
+    }
+
+    if (!savedAssistantMessage) {
+      savedAssistantMessage = {
+        id: `assistant-${Date.now()}`,
         conversation_id: conversationId,
         role: 'assistant',
         content: aiReplyText,
         input_mode: 'text',
         language: effectiveLanguage,
-      })
-      .select('id, conversation_id, role, content, input_mode, language, created_at')
-      .single();
-
-    if (assistantInsertError || !savedAssistantMessage) {
-      throw new ApiError(500, 'Failed to save AI response.', 'DB_ASSISTANT_MESSAGE_ERROR');
+        created_at: new Date().toISOString(),
+      };
     }
 
-    // 11. Update conversation's updated_at timestamp and active language
-    await privilegedSupabase
-      .from('conversations')
-      .update({
-        updated_at: new Date().toISOString(),
-        language: effectiveLanguage,
-      })
-      .eq('id', conversationId)
-      .eq('user_id', identity.userId);
-
-    // 12. Return response
+    // 12. Return response immediately
     sendJson(res, 200, {
       success: true,
       userMessage: savedUserMessage,

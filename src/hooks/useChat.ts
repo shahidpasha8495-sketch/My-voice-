@@ -124,6 +124,18 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       const optimisticId = `optimistic-${Date.now()}`;
 
+      // Show optimistic user message on the VERY FIRST FRAME (0ms UI latency)
+      const optimisticUserMsg: Message = {
+        id: optimisticId,
+        conversation_id: activeConversationId || 'pending-conversation',
+        role: 'user',
+        content: validation.sanitized,
+        input_mode: inputMode,
+        language: effectiveLanguage,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, optimisticUserMsg]);
+
       try {
         let targetConversationId = activeConversationId;
         if (!targetConversationId) {
@@ -134,19 +146,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           targetConversationId = createdConv.id;
           skipNextFetchForConvRef.current = createdConv.id;
         }
-
-        // Optimistically display user message
-        const optimisticUserMsg: Message = {
-          id: optimisticId,
-          conversation_id: targetConversationId,
-          role: 'user',
-          content: validation.sanitized,
-          input_mode: inputMode,
-          language: effectiveLanguage,
-          created_at: new Date().toISOString(),
-        };
-
-        setMessages((prev) => [...prev, optimisticUserMsg]);
 
         const response = await sendChatMessage(
           {

@@ -94,6 +94,7 @@ export function useSpeechRecognition(
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const isCancelledRef = useRef<boolean>(false);
   const hasErroredRef = useRef<boolean>(false);
+  const hasMicPermissionRef = useRef<boolean>(false);
   const collectedFinalRef = useRef<string>('');
   const collectedInterimRef = useRef<string>('');
   const activeLangRef = useRef<SupportedLanguage>(language);
@@ -170,14 +171,16 @@ export function useSpeechRecognition(
       setInteractionMode('voice');
       transitionTo('requesting_permission');
 
-      // Pre-check microphone permission when mediaDevices.getUserMedia is available
+      // Pre-check microphone permission once per session when mediaDevices.getUserMedia is available
       if (
+        !hasMicPermissionRef.current &&
         typeof navigator !== 'undefined' &&
         navigator.mediaDevices &&
         typeof navigator.mediaDevices.getUserMedia === 'function'
       ) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          hasMicPermissionRef.current = true;
           // Immediately release the raw MediaStream tracks so SpeechRecognition can bind cleanly
           stream.getTracks().forEach((track) => track.stop());
         } catch (permErr: unknown) {

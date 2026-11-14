@@ -11,6 +11,18 @@ const DEPRECATED_MODEL_PREFIXES = [
   'gemini-2.5',
 ];
 
+// Reuse a singleton GoogleGenAI client per API key to avoid cold-init overhead on every turn
+let cachedClient: GoogleGenAI | null = null;
+let cachedApiKey: string | null = null;
+
+function getGeminiClient(apiKey: string): GoogleGenAI {
+  if (!cachedClient || cachedApiKey !== apiKey) {
+    cachedClient = new GoogleGenAI({ apiKey });
+    cachedApiKey = apiKey;
+  }
+  return cachedClient;
+}
+
 /**
  * Resolves the Gemini model from GEMINI_MODEL env var.
  * Replaces deprecated models (1.5, 2.0, 2.5) with gemini-4-hydrogen.
@@ -30,7 +42,7 @@ export function resolveGeminiModel(configuredModel?: string): string {
 }
 
 export const BASE_SYSTEM_INSTRUCTION =
-  "You are MyVoice, a friendly, intelligent and multilingual conversational AI assistant. Understand the user's intent and provide helpful, accurate and natural answers. Support English, Hindi and Kannada. Respond in the language used by the user or their selected preference. Maintain relevant context within the current conversation. Be concise when appropriate and explain concepts clearly when needed. Never claim to perform actions you have not performed.";
+  "You are MyVoice, a friendly, fast, intelligent and multilingual conversational AI companion. Understand the user's intent and provide helpful, accurate and natural answers. Support English, Hindi and Kannada. Respond in the language used by the user or their selected preference. Maintain relevant context within the current conversation. Keep responses warm, clear and concise for instant voice and chat readability unless the user asks for a long explanation. Never claim to perform actions you have not performed.";
 
 export function buildSystemInstruction(targetLanguage: SupportedLanguage): string {
   const languageDirectiveMap: Record<SupportedLanguage, string> = {
@@ -104,7 +116,7 @@ export async function generateGeminiReply({
   historyMessages,
   currentMessage,
   language,
-  timeoutMs = 45_000,
+  timeoutMs = 25_000,
 }: GenerateGeminiReplyParams): Promise<string> {
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) {
@@ -119,7 +131,11 @@ export async function generateGeminiReply({
   const systemInstruction = buildSystemInstruction(language);
   const steps = buildConversationSteps(historyMessages, currentMessage, CONTEXT_WINDOW_LIMIT);
 
-  const client = new GoogleGenAI({ apiKey });
+  const client = getGeminiClient(apiKey);
+
+  // Use low thinking level for ultra-fast interactive voice/chat turnaround
+  // ('minimal' is supported on flash-lite models; 'low' is the fastest level on gemini-4-* models)
+  const thinkingLevel = model.includes('flash-lite') ? 'minimal' : 'low';
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -130,6 +146,9 @@ export async function generateGeminiReply({
         model,
         system_instruction: systemInstruction,
         input: steps,
+        generation_config: {
+          thinking_level: thinkingLevel,
+        },
         store: false,
       },
       {
