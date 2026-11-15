@@ -106,10 +106,54 @@ export function buildSystemInstruction(
 
   const modeDirective =
     options.inputMode === 'voice'
-      ? 'Delivery Mode — Natural Spoken Voice: The user spoke this message aloud and will hear your response read aloud via voice synthesis. Write in natural, flowing spoken sentences with human conversational rhythm (2 to 4 crisp sentences for simple questions, or clear spoken steps). Avoid raw markdown clutter, tables, or long symbol lists unless specifically asked for code.'
+      ? 'Delivery Mode — Natural Spoken Voice: The user spoke this message aloud and will hear your response read aloud via voice synthesis. Reply in 1 to 3 short, natural spoken sentences. Do NOT use markdown formatting, asterisks, bullet points, or emojis in voice replies.'
       : 'Delivery Mode — Interactive Chat: Deliver a highly relevant, immediately useful answer. Use clean formatting, concrete examples, or concise bullet points when they make the answer easier to scan and apply.';
 
   return `${BASE_SYSTEM_INSTRUCTION}\n\n${personaDirective}\n\n${modeDirective}\n\nLanguage Guidance: ${languageDirectiveMap[targetLanguage] || languageDirectiveMap['en-US']}`;
+}
+
+/**
+ * Detects unclear, single-letter, or noise-only voice transcripts and returns a
+ * short, friendly clarifying question in the active language.
+ */
+export function getClarifyingQuestionForUnclearAudio(
+  message: string,
+  language: SupportedLanguage,
+  inputMode?: InputMode
+): string | null {
+  if (inputMode !== 'voice') return null;
+  const cleaned = message.replace(/[.,!?…\-_]/g, '').trim().toLowerCase();
+  const isUnclear =
+    cleaned.length <= 1 ||
+    /^(uh+|um+|hmm+|ah+|er+|huh|mm+|oh+)$/i.test(cleaned);
+
+  if (!isUnclear) return null;
+
+  const clarifyingMap: Partial<Record<SupportedLanguage, string>> = {
+    'en-US':
+      "I didn't quite catch that clearly. Could you say that one more time?",
+    'hi-IN':
+      'मुझे आपकी आवाज़ स्पष्ट नहीं सुनाई दी। क्या आप कृपया इसे दोबारा बोल सकते हैं?',
+    'kn-IN':
+      'ನಿಮ್ಮ ಮಾತು ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಇನ್ನೊಮ್ಮೆ ಹೇಳುತ್ತೀರಾ?',
+    'ta-IN':
+      'உங்கள் குரல் தெளிவாகக் கேட்கவில்லை. தயவுசெய்து மீண்டும் एकமுறை சொல்கிறீர்களா?',
+    'te-IN':
+      'మీ మాట స్పష్టంగా వినిపించలేదు. దయచేసి మళ్ళీ ఒక్కసారి చెబుతారా?',
+    'ml-IN':
+      'നിങ്ങൾ പറഞ്ഞത് വ്യക്തമായി കേട്ടില്ല. ദಯവായി ഒന്നു കൂടി പറയാമോ?',
+    'bn-IN':
+      'আপনার কথা স্পষ্ট বোঝা যায়নি। অনুগ্রহ করে আরেকবার বলবেন কি?',
+    'es-ES':
+      'No alcancé a escucharte con claridad. ¿Podrías repetirlo una vez más?',
+    'fr-FR':
+      "Je n'ai pas bien entendu. Pourriez-vous répéter s'il vous plaît ?",
+    'de-DE':
+      'Ich habe das akustisch nicht ganz verstanden. Könnten Sie das bitte wiederholen?',
+    'ar-SA': 'لم أتمكن من سماع ذلك بوضوح. هل يمكنك إعادته مرة أخرى من فضلك؟',
+  };
+
+  return clarifyingMap[language] || clarifyingMap['en-US']!;
 }
 
 export interface InteractionStepInput {
@@ -168,10 +212,12 @@ async function tryStandardGeminiRestApi(params: {
   apiKey: string;
   systemInstruction: string;
   steps: InteractionStepInput[];
+  inputMode?: InputMode;
   signal: AbortSignal;
 }): Promise<string | null> {
-  const { apiKey, systemInstruction, steps, signal } = params;
+  const { apiKey, systemInstruction, steps, inputMode, signal } = params;
   const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  const maxOutputTokens = inputMode === 'voice' ? 180 : 900;
 
   const contents = steps.map((step) => ({
     role: step.type === 'model_output' ? 'model' : 'user',
@@ -190,8 +236,8 @@ async function tryStandardGeminiRestApi(params: {
           },
           contents,
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024,
+            temperature: 0.65,
+            maxOutputTokens,
           },
         }),
         signal,
@@ -338,6 +384,16 @@ export async function generateGeminiReply({
   inputMode,
   timeoutMs = 25_000,
 }: GenerateGeminiReplyParams): Promise<string> {
+  // Handle unclear or garbled voice audio immediately with a friendly clarifying question
+  const clarification = getClarifyingQuestionForUnclearAudio(
+    currentMessage,
+    language,
+    inputMode
+  );
+  if (clarification) {
+    return clarification;
+  }
+
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
   const isVitest = Boolean(process.env.VITEST);
 
@@ -427,6 +483,7 @@ export async function generateGeminiReply({
         apiKey,
         systemInstruction,
         steps,
+        inputMode,
         signal: controller.signal,
       });
       if (restReply) {

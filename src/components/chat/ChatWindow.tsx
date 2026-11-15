@@ -23,6 +23,7 @@ import { VoiceOrb } from '../voice/VoiceOrb';
 import { WeatherUvWidget } from '../weather/WeatherUvWidget';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
+import { VoiceAnalyticsWidget } from './VoiceAnalyticsWidget';
 
 export interface ChatWindowProps {
   messages: Message[];
@@ -37,6 +38,7 @@ export interface ChatWindowProps {
   isRecognitionSupported: boolean;
   isSynthesisSupported: boolean;
   isListening: boolean;
+  isPushToTalk?: boolean;
   isSpeaking: boolean;
   isPaused: boolean;
   isMuted?: boolean;
@@ -45,6 +47,10 @@ export interface ChatWindowProps {
   hasReplayableResponse: boolean;
   selectedCharacterId?: PlushCharacterId;
   userDisplayName?: string | null;
+  sttLatencyMs?: number | null;
+  llmLatencyMs?: number | null;
+  ttsLatencyMs?: number | null;
+  isCachedResponse?: boolean;
   onRetryConnection?: () => void;
   onToggleMute?: () => void;
   onVolumeChange?: (volume: number) => void;
@@ -54,6 +60,8 @@ export interface ChatWindowProps {
   onSelectSuggestedPrompt: (prompt: string) => void;
   onStartListening: () => void;
   onStopListening: () => void;
+  onStartPushToTalk?: () => void;
+  onStopPushToTalk?: () => void;
   onCancelListening: () => void;
   onSpeakMessage: (text: string, lang: SupportedLanguage, messageId: string) => void;
   onStopSpeaking: () => void;
@@ -77,6 +85,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   isRecognitionSupported,
   isSynthesisSupported,
   isListening,
+  isPushToTalk = false,
   isSpeaking,
   isPaused,
   isMuted = false,
@@ -85,6 +94,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   hasReplayableResponse,
   selectedCharacterId = 'mellow',
   userDisplayName,
+  sttLatencyMs = null,
+  llmLatencyMs = null,
+  ttsLatencyMs = null,
+  isCachedResponse = false,
   onRetryConnection,
   onToggleMute,
   onVolumeChange,
@@ -94,6 +107,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onSelectSuggestedPrompt,
   onStartListening,
   onStopListening,
+  onStartPushToTalk,
+  onStopPushToTalk,
   onCancelListening,
   onSpeakMessage,
   onStopSpeaking,
@@ -261,6 +276,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 isRecognitionSupported={isRecognitionSupported}
                 isSynthesisSupported={isSynthesisSupported}
                 isListening={isListening}
+                isPushToTalk={isPushToTalk}
                 isSpeaking={isSpeaking}
                 isPaused={isPaused}
                 hasReplayableResponse={hasReplayableResponse}
@@ -271,6 +287,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 onVolumeChange={onVolumeChange}
                 onStartListening={onStartListening}
                 onStopListening={onStopListening}
+                onStartPushToTalk={onStartPushToTalk}
+                onStopPushToTalk={onStopPushToTalk}
                 onCancelListening={onCancelListening}
                 onReplayResponse={onReplayResponse}
                 onStopSpeaking={onStopSpeaking}
@@ -288,6 +306,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <span>Open Voice Studio</span>
                 </button>
               )}
+            </div>
+
+            {/* Real-Time Voice Pipeline Telemetry & Usage Analytics */}
+            <div className="w-full max-w-4xl mb-7">
+              <VoiceAnalyticsWidget
+                messages={messages}
+                language={language}
+                sttLatencyMs={sttLatencyMs}
+                llmLatencyMs={llmLatencyMs}
+                ttsLatencyMs={ttsLatencyMs}
+                isCachedResponse={isCachedResponse}
+              />
             </div>
 
             {/* Live Weather & UV Index Environmental Widget */}
@@ -356,6 +386,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   isRecognitionSupported={isRecognitionSupported}
                   isSynthesisSupported={isSynthesisSupported}
                   isListening={isListening}
+                  isPushToTalk={isPushToTalk}
                   isSpeaking={isSpeaking}
                   isPaused={isPaused}
                   hasReplayableResponse={hasReplayableResponse}
@@ -366,6 +397,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   onVolumeChange={onVolumeChange}
                   onStartListening={onStartListening}
                   onStopListening={onStopListening}
+                  onStartPushToTalk={onStartPushToTalk}
+                  onStopPushToTalk={onStopPushToTalk}
                   onCancelListening={onCancelListening}
                   onReplayResponse={onReplayResponse}
                   onStopSpeaking={onStopSpeaking}
@@ -374,6 +407,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 />
               </div>
             </div>
+
+            <VoiceAnalyticsWidget
+              messages={messages}
+              language={language}
+              sttLatencyMs={sttLatencyMs}
+              llmLatencyMs={llmLatencyMs}
+              ttsLatencyMs={ttsLatencyMs}
+              isCachedResponse={isCachedResponse}
+            />
 
             <div className="flex flex-col gap-4 pt-2" data-testid="message-list">
               {messages.map((msg) => (

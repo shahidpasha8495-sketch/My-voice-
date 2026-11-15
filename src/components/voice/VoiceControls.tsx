@@ -1,4 +1,5 @@
 import {
+  Hand,
   Mic,
   MicOff,
   Pause,
@@ -18,6 +19,7 @@ export interface VoiceControlsProps {
   isRecognitionSupported: boolean;
   isSynthesisSupported: boolean;
   isListening: boolean;
+  isPushToTalk?: boolean;
   isSpeaking: boolean;
   isPaused: boolean;
   hasReplayableResponse: boolean;
@@ -28,6 +30,8 @@ export interface VoiceControlsProps {
   onVolumeChange?: (volume: number) => void;
   onStartListening: () => void;
   onStopListening: () => void;
+  onStartPushToTalk?: () => void;
+  onStopPushToTalk?: () => void;
   onCancelListening: () => void;
   onReplayResponse: () => void;
   onStopSpeaking: () => void;
@@ -40,6 +44,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   isRecognitionSupported,
   isSynthesisSupported,
   isListening,
+  isPushToTalk = false,
   isSpeaking,
   isPaused,
   hasReplayableResponse,
@@ -50,6 +55,8 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   onVolumeChange,
   onStartListening,
   onStopListening,
+  onStartPushToTalk,
+  onStopPushToTalk,
   onCancelListening,
   onReplayResponse,
   onStopSpeaking,
@@ -66,7 +73,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
       role="toolbar"
       aria-label="Voice interaction controls"
     >
-      {/* Start / Stop Microphone */}
+      {/* Start / Stop Microphone (with Barge-in support while speaking) */}
       {!isListening ? (
         <button
           type="button"
@@ -74,12 +81,16 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
           onClick={onStartListening}
           aria-label={
             isRecognitionSupported
-              ? 'Start microphone'
+              ? isSpeaking
+                ? 'Interrupt AI and start microphone'
+                : 'Start microphone'
               : 'Voice recognition unsupported in this browser'
           }
           title={
             isRecognitionSupported
-              ? 'Start speaking with your microphone'
+              ? isSpeaking
+                ? 'Barge-in: Interrupt AI speech and start talking immediately'
+                : 'Start speaking with automatic Voice Activity Detection (VAD)'
               : 'Speech recognition is not supported by this browser'
           }
           className={cn(
@@ -95,7 +106,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
           ) : (
             <MicOff className="w-4 h-4" />
           )}
-          <span>Start Mic</span>
+          <span>{isSpeaking ? 'Interrupt & Speak' : 'Start Mic (VAD)'}</span>
         </button>
       ) : (
         <>
@@ -119,6 +130,42 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
             <span>Cancel</span>
           </button>
         </>
+      )}
+
+      {/* Push-to-Talk (Hold to Talk) Fallback Button */}
+      {isRecognitionSupported && onStartPushToTalk && onStopPushToTalk && (
+        <button
+          type="button"
+          disabled={disabled}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            onStartPushToTalk();
+          }}
+          onPointerUp={(e) => {
+            e.preventDefault();
+            if (isPushToTalk || isListening) {
+              onStopPushToTalk();
+            }
+          }}
+          onPointerLeave={() => {
+            if (isPushToTalk) {
+              onStopPushToTalk();
+            }
+          }}
+          aria-label="Hold to talk (Push-to-Talk)"
+          title="Press and hold while speaking; release to send immediately"
+          data-testid="push-to-talk-button"
+          className={cn(
+            'select-none inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all duration-150',
+            isPushToTalk
+              ? 'border-[#34D399] bg-[#34D399]/20 text-[#34D399] shadow-glow-secondary scale-[1.03]'
+              : 'border-purple-300/60 dark:border-white/15 bg-white/80 dark:bg-[#171B2B] text-slate-700 dark:text-[#F8FAFC] hover:border-[#8B5CF6]/60',
+            disabled && 'opacity-50 cursor-not-allowed'
+          )}
+        >
+          <Hand className="w-3.5 h-3.5 text-[#8B5CF6] dark:text-[#22D3EE]" />
+          <span>{isPushToTalk ? 'Release to Send…' : 'Hold to Talk'}</span>
+        </button>
       )}
 
       {/* Speech Synthesis Playback Controls */}

@@ -4,10 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildConversationSteps,
   buildSystemInstruction,
+  getClarifyingQuestionForUnclearAudio,
   resolveGeminiModel,
 } from '../../api/_lib/gemini';
 import { MessageBubble } from '../../src/components/chat/MessageBubble';
+import { VoiceAnalyticsWidget } from '../../src/components/chat/VoiceAnalyticsWidget';
 import { LanguageSelector } from '../../src/components/common/LanguageSelector';
+import { VoiceControls } from '../../src/components/voice/VoiceControls';
 import { VoiceOrb } from '../../src/components/voice/VoiceOrb';
 import type { Message } from '../../src/types';
 
@@ -90,5 +93,60 @@ describe('Unit: Gemini Context Builder & Model Resolution', () => {
     expect(buildSystemInstruction('en-US')).toContain('MyVoice');
     expect(buildSystemInstruction('hi-IN')).toContain('hi-IN');
     expect(buildSystemInstruction('kn-IN')).toContain('kn-IN');
+    expect(
+      buildSystemInstruction('en-US', { characterId: 'mellow', inputMode: 'voice' })
+    ).toContain('1 to 3 short, natural spoken sentences');
+  });
+
+  it('asks a polite clarifying question in the spoken language when voice audio is unclear', () => {
+    expect(
+      getClarifyingQuestionForUnclearAudio('uh', 'en-US', 'voice')
+    ).toContain('say that one more time');
+    expect(
+      getClarifyingQuestionForUnclearAudio('hmm', 'hi-IN', 'voice')
+    ).toContain('दोबारा');
+    expect(
+      getClarifyingQuestionForUnclearAudio('?', 'kn-IN', 'voice')
+    ).toContain('ಇನ್ನೊಮ್ಮೆ');
+    expect(
+      getClarifyingQuestionForUnclearAudio('Explain quantum computing', 'en-US', 'voice')
+    ).toBeNull();
+  });
+
+  it('renders VoiceAnalyticsWidget and VoiceControls with Push-to-Talk and Barge-In', () => {
+    render(
+      <>
+        <VoiceAnalyticsWidget
+          messages={[]}
+          language="en-US"
+          sttLatencyMs={180}
+          llmLatencyMs={520}
+          ttsLatencyMs={22}
+          isCachedResponse={true}
+        />
+        <VoiceControls
+          voiceState="speaking"
+          isRecognitionSupported={true}
+          isSynthesisSupported={true}
+          isListening={false}
+          isPushToTalk={false}
+          isSpeaking={true}
+          isPaused={false}
+          hasReplayableResponse={true}
+          onStartListening={vi.fn()}
+          onStopListening={vi.fn()}
+          onStartPushToTalk={vi.fn()}
+          onStopPushToTalk={vi.fn()}
+          onCancelListening={vi.fn()}
+          onReplayResponse={vi.fn()}
+          onStopSpeaking={vi.fn()}
+        />
+      </>
+    );
+
+    expect(screen.getByTestId('voice-analytics-widget')).toBeInTheDocument();
+    expect(screen.getByText(/722ms E2E/i)).toBeInTheDocument();
+    expect(screen.getByTestId('push-to-talk-button')).toBeInTheDocument();
+    expect(screen.getByText(/Interrupt & Speak/i)).toBeInTheDocument();
   });
 });

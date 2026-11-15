@@ -42,7 +42,6 @@ export function cleanTextForSpeech(markdownText: string): string {
 export function splitIntoNaturalSpeechChunks(cleanedText: string, maxChunkLen = 200): string[] {
   const trimmed = cleanedText.trim();
   if (!trimmed) return [];
-  if (trimmed.length <= maxChunkLen) return [trimmed];
 
   // Split after sentence-ending punctuation (. ! ? ।) followed by space
   const rawSentences = trimmed
@@ -50,10 +49,16 @@ export function splitIntoNaturalSpeechChunks(cleanedText: string, maxChunkLen = 
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const chunks: string[] = [];
+  if (rawSentences.length <= 1) {
+    return [trimmed];
+  }
+
+  // Keep the VERY FIRST sentence as its own chunk so TTS starts speaking after the first sentence immediately
+  const chunks: string[] = [rawSentences[0]];
   let current = '';
 
-  for (const sentence of rawSentences) {
+  for (let i = 1; i < rawSentences.length; i += 1) {
+    const sentence = rawSentences[i];
     if (!current) {
       current = sentence;
     } else if (current.length + 1 + sentence.length <= maxChunkLen) {
@@ -141,6 +146,7 @@ export interface UseSpeechSynthesisReturn {
   activeMessageId: string | null;
   lastSpokenText: string;
   lastSpokenLang: SupportedLanguage;
+  lastTtsLatencyMs: number | null;
   availableVoices: SpeechSynthesisVoice[];
   error: VoiceError | null;
   speak: (text: string, lang?: SupportedLanguage, messageId?: string) => void;
@@ -171,11 +177,13 @@ export function useSpeechSynthesis(
   const [lastSpokenText, setLastSpokenText] = useState<string>('');
   const [lastSpokenLang, setLastSpokenLang] =
     useState<SupportedLanguage>(defaultLanguage);
+  const [lastTtsLatencyMs, setLastTtsLatencyMs] = useState<number | null>(null);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [error, setError] = useState<VoiceError | null>(null);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const playbackSessionRef = useRef<number>(0);
+  const speakRequestTimestampRef = useRef<number>(0);
 
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
@@ -277,6 +285,7 @@ export function useSpeechSynthesis(
       setError(null);
       playbackSessionRef.current += 1;
       const currentSession = playbackSessionRef.current;
+      speakRequestTimestampRef.current = performance.now();
 
       // Always cancel any existing playback before starting new playback
       try {
@@ -323,6 +332,13 @@ export function useSpeechSynthesis(
 
           utterance.onstart = () => {
             if (playbackSessionRef.current !== currentSession) return;
+            if (chunkIdx === 0 && speakRequestTimestampRef.current > 0) {
+              const ttsFirstAudioMs = Math.max(
+                8,
+                Math.round(performance.now() - speakRequestTimestampRef.current)
+              );
+              setLastTtsLatencyMs(ttsFirstAudioMs);
+            }
             setIsSpeaking(true);
             setIsPaused(false);
             setActiveMessageId(messageId ?? null);
@@ -438,6 +454,7 @@ export function useSpeechSynthesis(
     activeMessageId,
     lastSpokenText,
     lastSpokenLang,
+    lastTtsLatencyMs,
     availableVoices,
     error,
     speak,

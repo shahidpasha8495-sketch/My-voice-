@@ -126,12 +126,23 @@ export interface ChatRequestPayload {
   history?: Array<Pick<Message, 'role' | 'content'>>;
 }
 
+export interface VoicePipelineLatency {
+  sttMs: number;
+  llmMs: number;
+  ttsStartMs: number;
+  totalMs: number;
+  cached: boolean;
+  timestamp: string;
+}
+
 export interface ChatResponsePayload {
   success: boolean;
   userMessage: Message;
   assistantMessage: Message;
   conversation?: Conversation;
   detectedLanguage?: SupportedLanguage;
+  latencyMs?: number;
+  cached?: boolean;
   error?: string;
 }
 

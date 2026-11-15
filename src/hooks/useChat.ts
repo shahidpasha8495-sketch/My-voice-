@@ -18,6 +18,8 @@ export interface UseChatReturn {
   isLoadingHistory: boolean;
   isSending: boolean;
   error: string | null;
+  lastLlmLatencyMs: number | null;
+  lastResponseCached: boolean;
   sendMessage: (
     content: string,
     inputMode?: InputMode,
@@ -43,6 +45,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastLlmLatencyMs, setLastLlmLatencyMs] = useState<number | null>(null);
+  const [lastResponseCached, setLastResponseCached] = useState<boolean>(false);
 
   const isSubmittingRef = useRef<boolean>(false);
   const skipNextFetchForConvRef = useRef<string | null>(null);
@@ -159,6 +163,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           .slice(-20)
           .map((m) => ({ role: m.role, content: m.content }));
 
+        const llmStartPerf = performance.now();
         const response = await sendChatMessage(
           {
             conversationId: targetConversationId,
@@ -170,6 +175,19 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
           accessToken
         );
+
+        const measuredLlmMs =
+          response.latencyMs ??
+          Math.max(5, Math.round(performance.now() - llmStartPerf));
+        setLastLlmLatencyMs(measuredLlmMs);
+        setLastResponseCached(Boolean(response.cached));
+
+        // Log stage latency breakdown for developer visibility
+        if (typeof console !== 'undefined' && console.info) {
+          console.info(
+            `[MyVoice Latency] Mode=${inputMode} | LLM=${measuredLlmMs}ms | Cached=${Boolean(response.cached)} | Context=${recentHistory.length}/20 msgs`
+          );
+        }
 
         // Replace optimistic user message with persisted message and append assistant message
         setMessages((prev) => [
@@ -229,6 +247,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     isLoadingHistory,
     isSending,
     error,
+    lastLlmLatencyMs,
+    lastResponseCached,
     sendMessage,
     clearChatError,
     resetMessages,

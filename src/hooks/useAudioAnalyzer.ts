@@ -21,6 +21,11 @@ export function useAudioAnalyzer(voiceState: VoiceState): AudioAnalyzerState {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  const isListening =
+    voiceState === 'listening' || voiceState === 'speech_detected';
+  const isSpeaking = voiceState === 'speaking';
+  const isActive = isListening || isSpeaking;
+
   useEffect(() => {
     let cancelled = false;
 
@@ -40,102 +45,42 @@ export function useAudioAnalyzer(voiceState: VoiceState): AudioAnalyzerState {
       setIsMeasuringMic(false);
     };
 
-    const isListening =
-      voiceState === 'listening' || voiceState === 'speech_detected';
-    const isSpeaking = voiceState === 'speaking';
-
-    if (!isListening && !isSpeaking) {
+    if (!isActive) {
       cleanupAudio();
       setAmplitude(0);
       setBands(DEFAULT_BANDS);
       return cleanupAudio;
     }
 
-    // Attempt real Web Audio API microphone measurement when listening
-    const AudioContextCtor =
-      typeof window !== 'undefined'
-        ? window.AudioContext ||
-          (window as unknown as { webkitAudioContext?: typeof AudioContext })
-            .webkitAudioContext
-        : undefined;
-
-    if (
-      isListening &&
-      AudioContextCtor &&
-      typeof navigator !== 'undefined' &&
-      navigator.mediaDevices &&
-      typeof navigator.mediaDevices.getUserMedia === 'function'
-    ) {
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          if (cancelled) {
-            stream.getTracks().forEach((t) => t.stop());
-            return;
-          }
-          streamRef.current = stream;
-          const ctx = new AudioContextCtor();
-          audioCtxRef.current = ctx;
-          const source = ctx.createMediaStreamSource(stream);
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 64;
-          analyser.smoothingTimeConstant = 0.78;
-          source.connect(analyser);
-
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-          setIsMeasuringMic(true);
-
-          const tick = () => {
-            if (cancelled) return;
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            const nextBands: number[] = [];
-            for (let i = 0; i < 16; i += 1) {
-              const val = (dataArray[i] || 0) / 255;
-              sum += val;
-              nextBands.push(Math.max(0.08, Math.min(1, val)));
-            }
-            const avg = Math.min(1, sum / 16);
-            setAmplitude(avg);
-            setBands(nextBands);
-            rafRef.current = requestAnimationFrame(tick);
-          };
-
-          rafRef.current = requestAnimationFrame(tick);
-        })
-        .catch(() => {
-          // If microphone stream cannot be opened concurrently with SpeechRecognition,
-          // fall back to state-driven animation without claiming raw mic measurement.
-          setIsMeasuringMic(false);
-        });
-    }
-
-    // State-synchronized cadence animation for speaking (or when concurrent mic stream isn't active)
+    // State-synchronized cadence animation that smoothly drives the 16-band waveform
+    // without competing with Web Speech API for exclusive microphone hardware access.
     let phase = 0;
     const animateCadence = () => {
       if (cancelled) return;
-      phase += isSpeaking ? 0.16 : 0.12;
+      const isSpeechDetected = voiceState === 'speech_detected';
+      phase += isSpeaking ? 0.18 : isSpeechDetected ? 0.22 : 0.12;
+      const boost = isSpeechDetected ? 1.25 : isSpeaking ? 1.1 : 0.75;
+
       const simulatedBands = Array.from({ length: 16 }, (_, idx) => {
-        const wave1 = Math.sin(phase + idx * 0.45) * 0.35 + 0.45;
-        const wave2 = Math.cos(phase * 1.4 - idx * 0.3) * 0.2;
-        return Math.max(0.1, Math.min(0.95, wave1 + wave2));
+        const wave1 = Math.sin(phase + idx * 0.45) * 0.32 + 0.42;
+        const wave2 = Math.cos(phase * 1.4 - idx * 0.3) * 0.22;
+        return Math.max(0.08, Math.min(0.98, (wave1 + wave2) * boost));
       });
       const avg =
         simulatedBands.reduce((acc, v) => acc + v, 0) / simulatedBands.length;
-      setBands((prev) => (streamRef.current ? prev : simulatedBands));
-      setAmplitude((prev) => (streamRef.current ? prev : avg));
+      setBands(simulatedBands);
+      setAmplitude(avg);
+      setIsMeasuringMic(isListening);
       rafRef.current = requestAnimationFrame(animateCadence);
     };
 
-    if (!streamRef.current) {
-      rafRef.current = requestAnimationFrame(animateCadence);
-    }
+    rafRef.current = requestAnimationFrame(animateCadence);
 
     return () => {
       cancelled = true;
       cleanupAudio();
     };
-  }, [voiceState]);
+  }, [isActive, isListening, isSpeaking, voiceState]);
 
   return {
     amplitude,

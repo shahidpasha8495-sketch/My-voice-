@@ -83,6 +83,8 @@ export const DashboardPage: React.FC = () => {
     isLoadingHistory,
     isSending,
     error: chatError,
+    lastLlmLatencyMs,
+    lastResponseCached,
     sendMessage,
     clearChatError,
   } = useChat({
@@ -114,6 +116,13 @@ export const DashboardPage: React.FC = () => {
       speechSynthesis.stop();
     }
     void speechRecognition.startListening(language);
+  }, [language, speechRecognition, speechSynthesis]);
+
+  const handleStartPushToTalk = useCallback(() => {
+    if (speechSynthesis.isSpeaking) {
+      speechSynthesis.stop();
+    }
+    speechRecognition.startPushToTalk(language);
   }, [language, speechRecognition, speechSynthesis]);
 
   const handleNewConversation = useCallback(() => {
@@ -302,6 +311,7 @@ export const DashboardPage: React.FC = () => {
             isRecognitionSupported={speechRecognition.isSupported}
             isSynthesisSupported={speechSynthesis.isSupported}
             isListening={speechRecognition.isListening}
+            isPushToTalk={speechRecognition.isPushToTalk}
             isSpeaking={speechSynthesis.isSpeaking}
             isPaused={speechSynthesis.isPaused}
             isMuted={speechSynthesis.isMuted}
@@ -312,6 +322,10 @@ export const DashboardPage: React.FC = () => {
             )}
             selectedCharacterId={characterId}
             userDisplayName={profile?.display_name || user?.email?.split('@')[0]}
+            sttLatencyMs={speechRecognition.lastSttLatencyMs}
+            llmLatencyMs={lastLlmLatencyMs}
+            ttsLatencyMs={speechSynthesis.lastTtsLatencyMs}
+            isCachedResponse={lastResponseCached}
             onRetryConnection={() => void retryConnection()}
             onToggleMute={speechSynthesis.toggleMute}
             onVolumeChange={speechSynthesis.setVolume}
@@ -323,6 +337,8 @@ export const DashboardPage: React.FC = () => {
             }}
             onStartListening={handleStartListening}
             onStopListening={speechRecognition.stopListening}
+            onStartPushToTalk={handleStartPushToTalk}
+            onStopPushToTalk={speechRecognition.stopPushToTalk}
             onCancelListening={speechRecognition.cancelListening}
             onSpeakMessage={(text, lang, msgId) =>
               speechSynthesis.speak(text, lang, msgId)
