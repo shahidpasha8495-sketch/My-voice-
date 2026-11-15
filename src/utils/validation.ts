@@ -5,6 +5,14 @@ export const SUPPORTED_LANGUAGES: readonly [SupportedLanguage, ...SupportedLangu
   'en-US',
   'hi-IN',
   'kn-IN',
+  'ta-IN',
+  'te-IN',
+  'ml-IN',
+  'bn-IN',
+  'es-ES',
+  'fr-FR',
+  'de-DE',
+  'ar-SA',
 ];
 
 export const MAX_MESSAGE_LENGTH = 4000;
@@ -55,6 +63,15 @@ export const createConversationSchema = z.object({
       message: 'Conversation title must be between 1 and 150 characters.',
     }),
   language: supportedLanguageSchema.default('en-US'),
+});
+
+export const updateConversationSchema = z.object({
+  title: z
+    .string()
+    .transform((val) => val.trim())
+    .refine((val) => val.length > 0 && val.length <= 150, {
+      message: 'Conversation title must be between 1 and 150 characters.',
+    }),
 });
 
 export const loginSchema = z.object({

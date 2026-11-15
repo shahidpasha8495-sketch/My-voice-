@@ -14,8 +14,9 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import {
+  ALL_COMPANION_LIST,
+  getCharacterWelcome,
   PLUSH_CHARACTERS,
-  PLUSH_CHARACTER_LIST,
   type PlushCharacterId,
 } from '../../config/characters';
 import { useAudioAnalyzer } from '../../hooks/useAudioAnalyzer';
@@ -38,6 +39,13 @@ export interface VoiceStudioProps {
   isSpeaking: boolean;
   isPaused: boolean;
   isSending: boolean;
+  volume?: number;
+  isMuted?: boolean;
+  availableVoices?: SpeechSynthesisVoice[];
+  selectedVoiceURI?: string | null;
+  onVolumeChange?: (v: number) => void;
+  onToggleMute?: () => void;
+  onSelectVoiceURI?: (uri: string | null) => void;
   onSelectCharacter: (id: PlushCharacterId) => void;
   onStartListening: () => void;
   onStopListening: () => void;
@@ -64,6 +72,13 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({
   isSpeaking,
   isPaused,
   isSending,
+  volume = 1,
+  isMuted = false,
+  availableVoices = [],
+  selectedVoiceURI = '',
+  onVolumeChange,
+  onToggleMute,
+  onSelectVoiceURI,
   onSelectCharacter,
   onStartListening,
   onStopListening,
@@ -125,8 +140,8 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({
 
           <div className="flex items-center gap-2">
             {/* Quick Companion Switcher Pills */}
-            <div className="flex items-center gap-1 rounded-2xl bg-white/75 dark:bg-[#171B2B]/85 p-1.5 border border-purple-200/60 dark:border-white/10 backdrop-blur-xl">
-              {PLUSH_CHARACTER_LIST.map((c) => (
+            <div className="flex flex-wrap items-center gap-1 rounded-2xl bg-white/75 dark:bg-[#171B2B]/85 p-1.5 border border-purple-200/60 dark:border-white/10 backdrop-blur-xl">
+              {ALL_COMPANION_LIST.map((c) => (
                 <button
                   key={c.id}
                   type="button"
@@ -246,7 +261,7 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({
                     latestAssistantMessage.content
                   ) : (
                     <span className="text-slate-400 dark:text-[#94A3B8]">
-                      {character.welcomeMessages[language]}
+                      {getCharacterWelcome(character, language)}
                     </span>
                   )}
                 </p>
@@ -362,6 +377,62 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({
                 </button>
               )}
             </div>
+
+            {/* Studio Volume & Voice Selection Bar */}
+            {isSynthesisSupported && (
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-4 rounded-2xl border border-purple-200/60 dark:border-white/10 bg-white/60 dark:bg-[#101321]/75 px-4 py-2.5 text-xs w-full">
+                {onToggleMute && onVolumeChange && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={onToggleMute}
+                      aria-label={isMuted ? 'Unmute audio' : 'Mute audio'}
+                      className="text-[#8B5CF6] dark:text-[#22D3EE]"
+                    >
+                      {isMuted ? (
+                        <VolumeX className="h-4 w-4 text-[#F87171]" />
+                      ) : (
+                        <Volume2 className="h-4 w-4" />
+                      )}
+                    </button>
+                    <span className="font-semibold text-slate-700 dark:text-[#A1A1B8]">
+                      Volume: {isMuted ? 0 : Math.round(volume * 100)}%
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={isMuted ? 0 : volume}
+                      onChange={(e) => onVolumeChange(Number(e.target.value))}
+                      aria-label="Studio voice volume"
+                      className="w-24 accent-[#22D3EE] cursor-pointer"
+                    />
+                  </div>
+                )}
+
+                {onSelectVoiceURI && availableVoices.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-700 dark:text-[#A1A1B8]">
+                      Voice:
+                    </span>
+                    <select
+                      value={selectedVoiceURI || ''}
+                      onChange={(e) => onSelectVoiceURI(e.target.value || null)}
+                      aria-label="Select AI speech voice"
+                      className="rounded-xl border border-purple-200 dark:border-white/10 bg-white dark:bg-[#171B2B] px-2.5 py-1 text-xs text-slate-800 dark:text-[#F8FAFC] max-w-[200px]"
+                    >
+                      <option value="">Auto (Best Neural Voice)</option>
+                      {availableVoices.map((v) => (
+                        <option key={v.voiceURI} value={v.voiceURI}>
+                          {v.name} ({v.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right Column: Live Session Conversation History */}

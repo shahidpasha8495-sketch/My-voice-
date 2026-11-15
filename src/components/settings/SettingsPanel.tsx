@@ -5,11 +5,19 @@ import {
   LogOut,
   Mail,
   Mic,
+  Palette,
   Settings,
+  Sparkles,
   Volume2,
   X,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import {
+  ALL_COMPANION_LIST,
+  type PlushCharacterId,
+} from '../../config/characters';
+import { BACKGROUND_THEME_LIST } from '../../config/theme';
+import { useTheme } from '../../hooks/useTheme';
 import type { SupportedLanguage } from '../../types';
 import { LANGUAGE_LIST } from '../../utils/language';
 
@@ -23,6 +31,13 @@ export interface SettingsPanelProps {
   isRecognitionSupported: boolean;
   isSynthesisSupported: boolean;
   availableVoicesCount: number;
+  availableVoices?: SpeechSynthesisVoice[];
+  selectedVoiceURI?: string | null;
+  volume?: number;
+  selectedCharacterId?: PlushCharacterId;
+  onSelectVoiceURI?: (uri: string | null) => void;
+  onVolumeChange?: (volume: number) => void;
+  onSelectCharacter?: (id: PlushCharacterId) => void;
   onClose: () => void;
   onSaveProfile: (updates: {
     displayName: string;
@@ -43,12 +58,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   isRecognitionSupported,
   isSynthesisSupported,
   availableVoicesCount,
+  availableVoices = [],
+  selectedVoiceURI = '',
+  volume = 1,
+  selectedCharacterId = 'mellow',
+  onSelectVoiceURI,
+  onVolumeChange,
+  onSelectCharacter,
   onClose,
   onSaveProfile,
   onChangeAutoDetect,
   onChangeAutoSpeak,
   onSignOut,
 }) => {
+  const { backgroundTheme, setBackgroundTheme } = useTheme();
   const [nameInput, setNameInput] = useState(displayName);
   const [selectedLang, setSelectedLang] =
     useState<SupportedLanguage>(preferredLanguage);
@@ -167,12 +190,78 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
               </div>
 
-              {/* Preferred Language */}
+              {/* 6 Animated Background Themes */}
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-[#F8FAFC] mb-2">
+                  <Palette className="h-3.5 w-3.5 text-[#22D3EE]" />
+                  <span>Dynamic Animated Background Theme</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {BACKGROUND_THEME_LIST.map((themeItem) => {
+                    const active = backgroundTheme === themeItem.id;
+                    return (
+                      <button
+                        key={themeItem.id}
+                        type="button"
+                        onClick={() => setBackgroundTheme(themeItem.id)}
+                        data-testid={`select-theme-${themeItem.id}`}
+                        className={`flex flex-col items-start rounded-xl border p-2.5 text-left transition-all ${
+                          active
+                            ? 'border-[#22D3EE] bg-[#22D3EE]/15 text-[#F8FAFC] shadow-glow-secondary'
+                            : 'border-white/[0.08] bg-[#090914]/60 text-[#A1A1B8] hover:text-[#F8FAFC]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>{themeItem.emoji}</span>
+                          <span className="text-xs font-bold">{themeItem.name}</span>
+                        </div>
+                        <span className="mt-0.5 text-[10px] opacity-80 line-clamp-1">
+                          {themeItem.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* AI Companion Character Selection */}
+              {onSelectCharacter && (
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-[#F8FAFC] mb-2">
+                    <Sparkles className="h-3.5 w-3.5 text-[#A855F7]" />
+                    <span>Active AI Companion (10 Characters)</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                    {ALL_COMPANION_LIST.map((char) => {
+                      const active = selectedCharacterId === char.id;
+                      return (
+                        <button
+                          key={char.id}
+                          type="button"
+                          onClick={() => onSelectCharacter(char.id)}
+                          className={`rounded-xl border px-2.5 py-2 text-center transition-all ${
+                            active
+                              ? 'border-[#8B5CF6] bg-[#8B5CF6]/20 text-[#F8FAFC]'
+                              : 'border-white/[0.08] bg-[#090914]/60 text-[#A1A1B8] hover:text-[#F8FAFC]'
+                          }`}
+                        >
+                          <span className="block text-xs font-bold">{char.name}</span>
+                          <span className="block text-[9px] opacity-75 truncate">
+                            {char.personality}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Preferred Language (All 11 Languages) */}
               <div>
                 <label className="block text-xs font-semibold text-[#F8FAFC] mb-2">
-                  Preferred Language (Persisted to Supabase Profile)
+                  Preferred Language (11 Multilingual Voices &amp; Scripts)
                 </label>
-                <div className="grid grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
                   {LANGUAGE_LIST.map((lang) => {
                     const active = selectedLang === lang.code;
                     return (
@@ -180,19 +269,65 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         key={lang.code}
                         type="button"
                         onClick={() => setSelectedLang(lang.code)}
-                        className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all ${
+                        className={`flex flex-col items-start rounded-xl border p-2.5 text-left transition-all ${
                           active
                             ? 'border-[#8B5CF6] bg-[#8B5CF6]/20 text-[#F8FAFC] shadow-glow-primary'
                             : 'border-white/[0.08] bg-[#090914]/60 text-[#A1A1B8] hover:text-[#F8FAFC]'
                         }`}
                       >
-                        <span className="text-sm font-semibold">{lang.nativeName}</span>
-                        <span className="text-[11px] opacity-80">{lang.name}</span>
+                        <span className="text-xs font-semibold">{lang.nativeName}</span>
+                        <span className="text-[10px] opacity-80">{lang.name}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Voice Selection & Volume Control */}
+              {(onSelectVoiceURI || onVolumeChange) && (
+                <div className="space-y-3 rounded-xl bg-[#090914]/60 p-3.5 border border-white/[0.08]">
+                  {onVolumeChange && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-[#F8FAFC]">
+                        Speech Synthesis Volume ({Math.round(volume * 100)}%)
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={volume}
+                        onChange={(e) => onVolumeChange(Number(e.target.value))}
+                        aria-label="Speech synthesis volume"
+                        className="w-32 accent-[#22D3EE] cursor-pointer"
+                      />
+                    </div>
+                  )}
+                  {onSelectVoiceURI && availableVoices.length > 0 && (
+                    <div className="flex flex-col gap-1.5 pt-2 border-t border-white/[0.06]">
+                      <label
+                        htmlFor="settings-voice-select"
+                        className="text-xs font-medium text-[#F8FAFC]"
+                      >
+                        Preferred System / Neural Voice
+                      </label>
+                      <select
+                        id="settings-voice-select"
+                        value={selectedVoiceURI || ''}
+                        onChange={(e) => onSelectVoiceURI(e.target.value || null)}
+                        className="w-full rounded-xl border border-white/10 bg-[#191B30] px-3 py-2 text-xs text-[#F8FAFC]"
+                      >
+                        <option value="">Auto (Highest-Quality Neural Voice)</option>
+                        {availableVoices.map((v) => (
+                          <option key={v.voiceURI} value={v.voiceURI}>
+                            {v.name} ({v.lang})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Toggles */}
               <div className="space-y-3 rounded-xl bg-[#090914]/60 p-3.5 border border-white/[0.08]">
@@ -204,7 +339,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         Automatic Language Detection
                       </span>
                       <span className="block text-[11px] text-[#A1A1B8]">
-                        Detect English, Hindi, or Kannada automatically from your input
+                        Detect all 11 supported languages automatically from your input
                       </span>
                     </div>
                   </div>

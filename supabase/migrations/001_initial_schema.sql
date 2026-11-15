@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   display_name TEXT,
   preferred_language TEXT NOT NULL DEFAULT 'en-US'
-    CONSTRAINT profiles_preferred_language_check CHECK (preferred_language IN ('en-US', 'hi-IN', 'kn-IN')),
+    CONSTRAINT profiles_preferred_language_check CHECK (preferred_language IN ('en-US', 'hi-IN', 'kn-IN', 'ta-IN', 'te-IN', 'ml-IN', 'bn-IN', 'es-ES', 'fr-FR', 'de-DE', 'ar-SA')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL CONSTRAINT conversations_title_not_empty CHECK (char_length(trim(title)) > 0),
   language TEXT NOT NULL DEFAULT 'en-US'
-    CONSTRAINT conversations_language_check CHECK (language IN ('en-US', 'hi-IN', 'kn-IN')),
+    CONSTRAINT conversations_language_check CHECK (language IN ('en-US', 'hi-IN', 'kn-IN', 'ta-IN', 'te-IN', 'ml-IN', 'bn-IN', 'es-ES', 'fr-FR', 'de-DE', 'ar-SA')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS public.messages (
   input_mode TEXT NOT NULL DEFAULT 'text'
     CONSTRAINT messages_input_mode_check CHECK (input_mode IN ('text', 'voice')),
   language TEXT
-    CONSTRAINT messages_language_check CHECK (language IS NULL OR language IN ('en-US', 'hi-IN', 'kn-IN')),
+    CONSTRAINT messages_language_check CHECK (language IS NULL OR language IN ('en-US', 'hi-IN', 'kn-IN', 'ta-IN', 'te-IN', 'ml-IN', 'bn-IN', 'es-ES', 'fr-FR', 'de-DE', 'ar-SA')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -238,3 +238,44 @@ CREATE POLICY "messages_insert_user_only_own_conversation"
         AND c.user_id = auth.uid()
     )
   );
+
+-- =============================================================================
+-- 7. TABLE: companion_preferences & user_settings
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.companion_preferences (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  companion_id TEXT NOT NULL DEFAULT 'mellow'
+    CONSTRAINT companion_preferences_id_check CHECK (companion_id IN ('mellow', 'geni', 'cloudy', 'bunny', 'hearty', 'nova', 'luna', 'spark', 'atlas', 'zen')),
+  voice_uri TEXT,
+  voice_volume NUMERIC(3, 2) NOT NULL DEFAULT 1.00,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_settings (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  background_theme TEXT NOT NULL DEFAULT 'aurora-galaxy'
+    CONSTRAINT user_settings_theme_check CHECK (background_theme IN ('aurora-galaxy', 'deep-space', 'neon-cyberpunk', 'ocean-dreams', 'sunset-gradient', 'minimal-light')),
+  auto_detect_language BOOLEAN NOT NULL DEFAULT TRUE,
+  auto_speak_responses BOOLEAN NOT NULL DEFAULT TRUE,
+  preferred_city TEXT DEFAULT 'Bengaluru',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.companion_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "companion_preferences_own" ON public.companion_preferences;
+CREATE POLICY "companion_preferences_own"
+  ON public.companion_preferences
+  FOR ALL
+  TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "user_settings_own" ON public.user_settings;
+CREATE POLICY "user_settings_own"
+  ON public.user_settings
+  FOR ALL
+  TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);

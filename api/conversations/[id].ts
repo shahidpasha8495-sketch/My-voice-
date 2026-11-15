@@ -1,8 +1,9 @@
-import { uuidSchema } from '../../src/utils/validation';
+import { updateConversationSchema, uuidSchema } from '../../src/utils/validation';
 import {
   ApiError,
   applySecurityHeaders,
   getClientIdentifier,
+  parseJsonBody,
   sendError,
   sendJson,
   type VercelRequest,
@@ -30,8 +31,8 @@ function extractConversationId(req: VercelRequest): string {
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   applySecurityHeaders(res);
 
-  if (req.method !== 'GET' && req.method !== 'DELETE') {
-    res.setHeader('Allow', 'GET, DELETE');
+  if (req.method !== 'GET' && req.method !== 'DELETE' && req.method !== 'PATCH') {
+    res.setHeader('Allow', 'GET, PATCH, DELETE');
     sendError(res, 405, 'Method not allowed.', 'METHOD_NOT_ALLOWED');
     return;
   }
@@ -86,6 +87,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         success: true,
         conversation,
         messages: messages ?? [],
+      });
+      return;
+    }
+
+    if (req.method === 'PATCH') {
+      const body = await parseJsonBody(req);
+      const parsed = updateConversationSchema.safeParse(body);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0]?.message || 'Invalid conversation title.';
+        throw new ApiError(400, issue, 'VALIDATION_ERROR');
+      }
+
+      const { data: updated, error: updateError } = await supabase
+        .from('conversations')
+        .update({
+          title: parsed.data.title,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conversationId)
+        .eq('user_id', identity.userId)
+        .select('id, user_id, title, language, created_at, updated_at')
+        .single();
+
+      if (updateError || !updated) {
+        throw new ApiError(500, 'Failed to rename conversation.', 'DB_UPDATE_ERROR');
+      }
+
+      sendJson(res, 200, {
+        success: true,
+        conversation: updated,
       });
       return;
     }

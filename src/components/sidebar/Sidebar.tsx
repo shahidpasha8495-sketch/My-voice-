@@ -5,13 +5,14 @@ import {
   MessageSquarePlus,
   Moon,
   Radio,
+  Search,
   Settings,
   Sparkles,
   Sun,
   User as UserIcon,
   X,
 } from 'lucide-react';
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { PLUSH_CHARACTERS, type PlushCharacterId } from '../../config/characters';
 import { useTheme } from '../../hooks/useTheme';
 import type { Conversation, UserProfile } from '../../types';
@@ -34,6 +35,10 @@ export interface SidebarProps {
   onNewConversation: () => void;
   onSelectConversation: (id: string) => void;
   onRequestDeleteConversation: (conversation: Conversation) => void;
+  onRenameConversation?: (
+    conversationId: string,
+    newTitle: string
+  ) => Promise<boolean> | void;
   onOpenSettings: () => void;
   onSignOut: () => void;
   onCloseMobile?: () => void;
@@ -51,16 +56,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewConversation,
   onSelectConversation,
   onRequestDeleteConversation,
+  onRenameConversation,
   onOpenSettings,
   onSignOut,
   onCloseMobile,
 }) => {
   const { isDark, toggleTheme } = useTheme();
+  const [searchQuery, setSearchQuery] = useState('');
   const displayName =
     userProfile?.display_name || userEmail?.split('@')[0] || 'Authenticated User';
   const langMeta = getLanguageMetadata(userProfile?.preferred_language);
   const activeCompanion =
     PLUSH_CHARACTERS[selectedCharacterId] || PLUSH_CHARACTERS.mellow;
+
+  const filteredConversations = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((conv) =>
+      conv.title.toLowerCase().includes(q)
+    );
+  }, [conversations, searchQuery]);
 
   return (
     <aside
@@ -221,12 +236,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
             Conversation History
           </h2>
           <span className="rounded-full bg-purple-100 dark:bg-[#191B30] px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-[#A1A1B8]">
-            {conversations.length}
+            {filteredConversations.length}
           </span>
         </div>
 
+        {/* Search Conversations Input */}
+        <div className="relative mb-2.5 px-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-[#72758E]" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search conversations..."
+            aria-label="Search conversations"
+            data-testid="search-conversations-input"
+            className="w-full rounded-xl border border-purple-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#090B14]/80 pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-[#F8FAFC] placeholder-slate-400 dark:placeholder-[#72758E] focus:border-[#8B5CF6] focus:outline-none"
+          />
+        </div>
+
         <ConversationList
-          conversations={conversations}
+          conversations={filteredConversations}
           activeConversationId={activeConversationId}
           loading={loadingConversations}
           onSelectConversation={(id) => {
@@ -235,6 +264,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onCloseMobile?.();
           }}
           onRequestDeleteConversation={onRequestDeleteConversation}
+          onRenameConversation={onRenameConversation}
         />
       </div>
 

@@ -8,11 +8,17 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import {
+  ALL_COMPANION_LIST,
+  getCharacterVoicePreview,
+  getCharacterWelcome,
   PLUSH_CHARACTERS,
-  PLUSH_CHARACTER_LIST,
   type PlushCharacterId,
 } from '../../config/characters';
-import type { SupportedLanguage, VoiceState } from '../../types';
+import type {
+  CompanionExpression,
+  SupportedLanguage,
+  VoiceState,
+} from '../../types';
 import { cn } from '../../utils/formatters';
 import { PlushCharacter } from './PlushCharacter';
 
@@ -24,12 +30,20 @@ export interface CharacterGalleryProps {
   onStartTalkingWithCharacter?: (id: PlushCharacterId) => void;
 }
 
-const PREVIEW_STATES: Array<{ state: VoiceState; label: string }> = [
-  { state: 'idle', label: 'Idle' },
-  { state: 'listening', label: 'Listening' },
-  { state: 'processing', label: 'Thinking' },
-  { state: 'speaking', label: 'Speaking' },
-  { state: 'error', label: 'Error' },
+const PREVIEW_STATES: Array<{
+  state: VoiceState;
+  expression: CompanionExpression;
+  label: string;
+}> = [
+  { state: 'idle', expression: 'happy', label: 'Happy' },
+  { state: 'listening', expression: 'listening', label: 'Listening' },
+  { state: 'processing', expression: 'thinking', label: 'Thinking' },
+  { state: 'speaking', expression: 'speaking', label: 'Speaking' },
+  { state: 'idle', expression: 'excited', label: 'Excited' },
+  { state: 'idle', expression: 'confused', label: 'Confused' },
+  { state: 'idle', expression: 'sad', label: 'Sad' },
+  { state: 'idle', expression: 'sleeping', label: 'Sleeping' },
+  { state: 'idle', expression: 'celebrating', label: 'Celebrating' },
 ];
 
 export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
@@ -42,6 +56,8 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
   const [focusedId, setFocusedId] =
     useState<PlushCharacterId>(selectedCharacterId);
   const [previewState, setPreviewState] = useState<VoiceState>('idle');
+  const [previewExpression, setPreviewExpression] =
+    useState<CompanionExpression>('happy');
 
   const activeChar = PLUSH_CHARACTERS[focusedId] || PLUSH_CHARACTERS.mellow;
 
@@ -56,13 +72,13 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-[#8B5CF6]/15 border border-[#8B5CF6]/30 px-3.5 py-1 text-xs font-semibold text-[#8B5CF6] dark:text-[#22D3EE] mb-2">
               <Sparkles className="h-3.5 w-3.5" />
-              <span>Original 3D Plush Companions</span>
+              <span>Original 3D Plush & AI Companions</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-[#F8FAFC]">
               Meet the Plush AI Family
             </h2>
             <p className="mt-1 text-sm text-slate-600 dark:text-[#94A3B8]">
-              Explore all five fuzzy companions, preview their live voice-reactive expressions, and choose your favorite partner.
+              Explore all 10 intelligent companions, preview their 9 live voice-reactive expressions, and choose your favorite partner.
             </p>
           </div>
         </div>
@@ -82,6 +98,7 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
               <PlushCharacter
                 characterId={activeChar.id}
                 voiceState={previewState}
+                expression={previewExpression}
                 amplitude={previewState === 'speaking' ? 0.65 : 0.2}
                 size="lg"
               />
@@ -95,12 +112,15 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
                 <div className="flex flex-wrap items-center justify-center gap-1.5">
                   {PREVIEW_STATES.map((item) => (
                     <button
-                      key={item.state}
+                      key={item.expression}
                       type="button"
-                      onClick={() => setPreviewState(item.state)}
+                      onClick={() => {
+                        setPreviewState(item.state);
+                        setPreviewExpression(item.expression);
+                      }}
                       className={cn(
                         'rounded-xl px-2.5 py-1 text-xs font-medium transition-all',
-                        previewState === item.state
+                        previewExpression === item.expression
                           ? 'bg-[#8B5CF6] text-white shadow-sm'
                           : 'bg-white/70 dark:bg-white/5 text-slate-600 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-white'
                       )}
@@ -142,7 +162,7 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
                     Signature Greeting ({language})
                   </p>
                   <p className="text-sm italic text-slate-800 dark:text-[#F8FAFC]">
-                    &ldquo;{activeChar.welcomeMessages[language]}&rdquo;
+                    &ldquo;{getCharacterWelcome(activeChar, language)}&rdquo;
                   </p>
                 </div>
 
@@ -199,8 +219,9 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
                     type="button"
                     onClick={() => {
                       setPreviewState('speaking');
+                      setPreviewExpression('speaking');
                       onPreviewVoice(
-                        activeChar.voicePreviewLine[language],
+                        getCharacterVoicePreview(activeChar, language),
                         language
                       );
                     }}
@@ -215,9 +236,9 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
           </motion.div>
         </AnimatePresence>
 
-        {/* All 5 Characters Grid */}
+        {/* All 10 Companions Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {PLUSH_CHARACTER_LIST.map((char) => {
+          {ALL_COMPANION_LIST.map((char) => {
             const isSelected = char.id === selectedCharacterId;
             const isFocused = char.id === focusedId;
             return (
@@ -235,6 +256,7 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
                 <PlushCharacter
                   characterId={char.id}
                   voiceState={isFocused ? previewState : 'idle'}
+                  expression={isFocused ? previewExpression : 'happy'}
                   size="sm"
                   interactive={false}
                 />
@@ -272,8 +294,9 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
                       e.stopPropagation();
                       setFocusedId(char.id);
                       setPreviewState('speaking');
+                      setPreviewExpression('speaking');
                       onPreviewVoice?.(
-                        char.voicePreviewLine[language],
+                        getCharacterVoicePreview(char, language),
                         language
                       );
                     }}

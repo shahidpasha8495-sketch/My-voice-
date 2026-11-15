@@ -9,6 +9,10 @@ export interface ConversationListProps {
   loading: boolean;
   onSelectConversation: (id: string) => void;
   onRequestDeleteConversation: (conversation: Conversation) => void;
+  onRenameConversation?: (
+    conversationId: string,
+    newTitle: string
+  ) => Promise<boolean> | void;
 }
 
 export const ConversationList: React.FC<ConversationListProps> = ({
@@ -17,6 +21,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   loading,
   onSelectConversation,
   onRequestDeleteConversation,
+  onRenameConversation,
 }) => {
   if (loading && conversations.length === 0) {
     return (
@@ -58,6 +63,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           isActive={conv.id === activeConversationId}
           onSelect={onSelectConversation}
           onRequestDelete={onRequestDeleteConversation}
+          onRename={onRenameConversation}
         />
       ))}
     </div>

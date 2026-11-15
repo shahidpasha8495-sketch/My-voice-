@@ -1,4 +1,36 @@
-export type SupportedLanguage = 'en-US' | 'hi-IN' | 'kn-IN';
+export type SupportedLanguage =
+  | 'en-US'
+  | 'hi-IN'
+  | 'kn-IN'
+  | 'ta-IN'
+  | 'te-IN'
+  | 'ml-IN'
+  | 'bn-IN'
+  | 'es-ES'
+  | 'fr-FR'
+  | 'de-DE'
+  | 'ar-SA';
+
+export type BackgroundThemeId =
+  | 'aurora-galaxy'
+  | 'deep-space'
+  | 'neon-cyberpunk'
+  | 'ocean-dreams'
+  | 'sunset-gradient'
+  | 'minimal-light';
+
+export type CompanionExpression =
+  | 'happy'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'excited'
+  | 'confused'
+  | 'sad'
+  | 'sleeping'
+  | 'celebrating';
+
+export type ConnectionState = 'online' | 'connecting' | 'offline';
 
 export type InputMode = 'text' | 'voice';
 

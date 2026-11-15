@@ -102,7 +102,19 @@ describe('Integration & Security: Backend API Routes & Database RLS Policies', (
     expect(getStatus()).toBe(200);
     const json = getJson();
     expect(json.status).toBe('ok');
-    expect(json.capabilities.supportedLanguages).toEqual(['en-US', 'hi-IN', 'kn-IN']);
+    expect(json.capabilities.supportedLanguages).toEqual([
+      'en-US',
+      'hi-IN',
+      'kn-IN',
+      'ta-IN',
+      'te-IN',
+      'ml-IN',
+      'bn-IN',
+      'es-ES',
+      'fr-FR',
+      'de-DE',
+      'ar-SA',
+    ]);
     expect(JSON.stringify(json)).not.toContain('test-server-gemini-key-secret');
   });
 

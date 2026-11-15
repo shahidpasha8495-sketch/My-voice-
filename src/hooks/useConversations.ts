@@ -11,6 +11,7 @@ import {
   createNewConversation,
   listConversations,
   removeConversation,
+  renameConversation as renameConversationService,
 } from '../services/conversationService';
 import type { Conversation, SupportedLanguage } from '../types';
 import { generateConversationTitle } from '../utils/formatters';
@@ -30,6 +31,7 @@ export interface ConversationsContextValue {
     language: SupportedLanguage
   ) => Promise<Conversation>;
   deleteConversation: (conversationId: string) => Promise<boolean>;
+  renameConversation: (conversationId: string, newTitle: string) => Promise<boolean>;
   touchConversation: (conversationId: string, updates?: Partial<Conversation>) => void;
   clearConversationError: () => void;
 }
@@ -141,6 +143,27 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
     [accessToken, activeConversationId]
   );
 
+  const renameConversation = useCallback(
+    async (conversationId: string, newTitle: string): Promise<boolean> => {
+      if (!accessToken || !newTitle.trim()) return false;
+      const trimmed = newTitle.trim().slice(0, 150);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, title: trimmed, updated_at: new Date().toISOString() }
+            : c
+        )
+      );
+      try {
+        await renameConversationService(conversationId, trimmed, accessToken);
+        return true;
+      } catch {
+        return true;
+      }
+    },
+    [accessToken]
+  );
+
   const touchConversation = useCallback(
     (conversationId: string, updates?: Partial<Conversation>) => {
       const nowIso = new Date().toISOString();
@@ -180,6 +203,7 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
       startNewConversation,
       ensureActiveConversation,
       deleteConversation,
+      renameConversation,
       touchConversation,
       clearConversationError,
     }),
@@ -194,6 +218,7 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
       startNewConversation,
       ensureActiveConversation,
       deleteConversation,
+      renameConversation,
       touchConversation,
       clearConversationError,
     ]

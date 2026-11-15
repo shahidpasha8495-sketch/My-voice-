@@ -5,6 +5,7 @@ import {
   Play,
   RotateCcw,
   Square,
+  Volume2,
   VolumeX,
   XCircle,
 } from 'lucide-react';
@@ -21,6 +22,10 @@ export interface VoiceControlsProps {
   isPaused: boolean;
   hasReplayableResponse: boolean;
   disabled?: boolean;
+  isMuted?: boolean;
+  volume?: number;
+  onToggleMute?: () => void;
+  onVolumeChange?: (volume: number) => void;
   onStartListening: () => void;
   onStopListening: () => void;
   onCancelListening: () => void;
@@ -39,6 +44,10 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   isPaused,
   hasReplayableResponse,
   disabled = false,
+  isMuted = false,
+  volume = 1,
+  onToggleMute,
+  onVolumeChange,
   onStartListening,
   onStopListening,
   onCancelListening,
@@ -160,6 +169,42 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
           <RotateCcw className="w-3.5 h-3.5 text-[#8B5CF6]" />
           <span>Replay Response</span>
         </button>
+      )}
+
+      {/* Mute / Unmute & Volume Control */}
+      {isSynthesisSupported && onToggleMute && (
+        <div className="inline-flex items-center gap-2 rounded-xl bg-[#171B2B]/90 border border-white/10 px-2.5 py-1.5">
+          <button
+            type="button"
+            onClick={onToggleMute}
+            aria-label={isMuted ? 'Unmute AI voice' : 'Mute AI voice'}
+            title={isMuted ? 'Unmute Voice' : 'Mute Voice'}
+            data-testid="voice-mute-toggle"
+            className={cn(
+              'rounded p-0.5 transition-colors',
+              isMuted ? 'text-[#F87171]' : 'text-[#22D3EE]'
+            )}
+          >
+            {isMuted ? (
+              <VolumeX className="h-3.5 w-3.5" />
+            ) : (
+              <Volume2 className="h-3.5 w-3.5" />
+            )}
+          </button>
+          {onVolumeChange && (
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={isMuted ? 0 : volume}
+              onChange={(e) => onVolumeChange(Number(e.target.value))}
+              aria-label="Voice volume"
+              data-testid="voice-volume-slider"
+              className="w-16 h-1.5 accent-[#22D3EE] cursor-pointer"
+            />
+          )}
+        </div>
       )}
     </div>
   );

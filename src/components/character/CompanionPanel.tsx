@@ -1,11 +1,15 @@
 import { Globe, Mic, Radio, Sparkles, Volume2 } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ALL_COMPANION_LIST,
   PLUSH_CHARACTERS,
-  PLUSH_CHARACTER_LIST,
   type PlushCharacterId,
 } from '../../config/characters';
-import type { SupportedLanguage, VoiceState } from '../../types';
+import type {
+  CompanionExpression,
+  SupportedLanguage,
+  VoiceState,
+} from '../../types';
 import { cn } from '../../utils/formatters';
 import { getLanguageMetadata } from '../../utils/language';
 import { PlushCharacter } from './PlushCharacter';
@@ -36,6 +40,20 @@ const COMPANION_VOICE_PROMPT: Record<VoiceState, string> = {
   error: "Let's try that again.",
 };
 
+const EXPRESSION_OPTIONS: Array<{
+  id: CompanionExpression;
+  emoji: string;
+  label: string;
+}> = [
+  { id: 'happy', emoji: '😊', label: 'Happy' },
+  { id: 'excited', emoji: '🤩', label: 'Excited' },
+  { id: 'thinking', emoji: '🤔', label: 'Thinking' },
+  { id: 'confused', emoji: '🧐', label: 'Confused' },
+  { id: 'sad', emoji: '🥺', label: 'Sad' },
+  { id: 'sleeping', emoji: '😴', label: 'Sleeping' },
+  { id: 'celebrating', emoji: '🎉', label: 'Celebrate' },
+];
+
 export const CompanionPanel: React.FC<CompanionPanelProps> = ({
   selectedCharacterId,
   voiceState,
@@ -49,6 +67,8 @@ export const CompanionPanel: React.FC<CompanionPanelProps> = ({
   onOpenStudio,
   onOpenGallery,
 }) => {
+  const [manualExpression, setManualExpression] =
+    useState<CompanionExpression>('happy');
   const companion =
     PLUSH_CHARACTERS[selectedCharacterId] || PLUSH_CHARACTERS.mellow;
   const langMeta = getLanguageMetadata(language);
@@ -105,6 +125,7 @@ export const CompanionPanel: React.FC<CompanionPanelProps> = ({
         <PlushCharacter
           characterId={selectedCharacterId}
           voiceState={voiceState}
+          expression={voiceState === 'idle' ? manualExpression : undefined}
           size="md"
           interactive={true}
           onClick={isListening ? onStopListening : onStartListening}
@@ -117,6 +138,26 @@ export const CompanionPanel: React.FC<CompanionPanelProps> = ({
         <p className="mt-1 text-[11px] text-[#A1A1B8] leading-relaxed">
           {companion.shortTrait}
         </p>
+
+        {/* Live Expression Mood Switcher */}
+        <div className="mt-3 flex flex-wrap justify-center gap-1">
+          {EXPRESSION_OPTIONS.map((expr) => (
+            <button
+              key={expr.id}
+              type="button"
+              onClick={() => setManualExpression(expr.id)}
+              title={`${expr.label} expression`}
+              className={cn(
+                'rounded-lg px-2 py-1 text-[10px] font-medium transition-all border',
+                manualExpression === expr.id && voiceState === 'idle'
+                  ? 'border-[#22D3EE]/60 bg-[#22D3EE]/15 text-[#F8FAFC]'
+                  : 'border-white/[0.08] bg-[#090914]/60 text-[#A1A1B8] hover:text-white'
+              )}
+            >
+              <span>{expr.emoji}</span>
+            </button>
+          ))}
+        </div>
 
         {/* Specialty Badges */}
         <div className="mt-3 flex flex-wrap justify-center gap-1.5">
@@ -145,11 +186,11 @@ export const CompanionPanel: React.FC<CompanionPanelProps> = ({
         </button>
       </div>
 
-      {/* Quick 5-Companion Switcher */}
+      {/* Quick 10-Companion Switcher */}
       <div className="rounded-2xl border border-white/[0.08] bg-[#191B30]/80 p-3.5">
         <div className="flex items-center justify-between mb-2.5">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#A1A1B8]">
-            Switch Plush Pal
+            Switch Companion
           </span>
           <button
             type="button"
@@ -161,7 +202,7 @@ export const CompanionPanel: React.FC<CompanionPanelProps> = ({
         </div>
 
         <div className="grid grid-cols-5 gap-1.5">
-          {PLUSH_CHARACTER_LIST.map((char) => {
+          {ALL_COMPANION_LIST.map((char) => {
             const active = char.id === selectedCharacterId;
             return (
               <button

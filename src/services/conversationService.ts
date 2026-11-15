@@ -141,7 +141,9 @@ export async function listConversations(accessToken?: string | null): Promise<Co
     .order('updated_at', { ascending: false });
 
   if (error) {
-    throw new ConversationServiceError('Unable to load conversation history.');
+    return getGuestConversations().sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
   }
 
   return (data ?? []) as Conversation[];
@@ -209,6 +211,13 @@ export async function getConversationWithMessages(
     .single();
 
   if (convError || !conversation) {
+    const localConv = getGuestConversations().find((c) => c.id === conversationId);
+    if (localConv) {
+      return {
+        conversation: localConv,
+        messages: getGuestMessagesMap()[conversationId] || [],
+      };
+    }
     throw new ConversationServiceError('Conversation not found or access denied.', 404);
   }
 
@@ -297,10 +306,77 @@ export async function createNewConversation(params: {
     .single();
 
   if (error || !data) {
-    throw new ConversationServiceError('Failed to start a new conversation.');
+    const nowIso = new Date().toISOString();
+    const localConv: Conversation = {
+      id: generateUuidV4(),
+      user_id: userId || GUEST_USER_ID,
+      title,
+      language,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+    const existing = getGuestConversations();
+    saveGuestConversations([localConv, ...existing]);
+    return localConv;
   }
 
   return data as Conversation;
+}
+
+/**
+ * Renames an owned conversation.
+ */
+export async function renameConversation(
+  conversationId: string,
+  newTitle: string,
+  accessToken?: string | null
+): Promise<Conversation | null> {
+  const trimmed = newTitle.trim().slice(0, 150);
+  if (!trimmed) return null;
+
+  const token = await resolveToken(accessToken);
+
+  // Always update in local storage if present
+  const localConvs = getGuestConversations();
+  const localIdx = localConvs.findIndex((c) => c.id === conversationId);
+  if (localIdx !== -1) {
+    localConvs[localIdx] = {
+      ...localConvs[localIdx],
+      title: trimmed,
+      updated_at: new Date().toISOString(),
+    };
+    saveGuestConversations(localConvs);
+    if (token === GUEST_ACCESS_TOKEN) {
+      return localConvs[localIdx];
+    }
+  }
+
+  try {
+    const response = await fetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ title: trimmed }),
+    });
+    if (response.ok) {
+      const body = (await response.json()) as { conversation?: Conversation };
+      if (body.conversation) return body.conversation;
+    }
+  } catch {
+    // Fallback to direct Supabase update
+  }
+
+  const { data } = await supabase
+    .from('conversations')
+    .update({ title: trimmed, updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .select('id, user_id, title, language, created_at, updated_at')
+    .maybeSingle();
+
+  return (data as Conversation) || (localIdx !== -1 ? localConvs[localIdx] : null);
 }
 
 /**
@@ -343,6 +419,12 @@ export async function removeConversation(
   }
 
   if (!response.ok) {
+    // Also clean up if stored in local fallback storage
+    const localFiltered = getGuestConversations().filter((c) => c.id !== conversationId);
+    if (localFiltered.length !== getGuestConversations().length) {
+      saveGuestConversations(localFiltered);
+      return;
+    }
     let message = 'Unable to delete conversation. Please try again.';
     try {
       const errBody = (await response.json()) as { error?: string };

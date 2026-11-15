@@ -5,14 +5,19 @@ import { useCharacter } from './useCharacter';
 import { useVoiceState } from './useVoiceState';
 
 export const COMPANION_VOICE_PROSODY: Record<
-  PlushCharacterId,
+  string,
   { rate: number; pitch: number }
 > = {
   mellow: { rate: 0.97, pitch: 0.98 }, // Calm, cozy, soothing
   geni: { rate: 1.04, pitch: 1.03 },   // Bright, energetic, articulate
-  cloudy: { rate: 0.95, pitch: 0.97 }, // Serene, unhurried, thoughtful
+  cloudy: { rate: 0.95, pitch: 0.97 }, // Friendly and peaceful
   bunny: { rate: 1.03, pitch: 1.05 },  // Warm, cheerful, encouraging
   hearty: { rate: 1.01, pitch: 1.02 }, // Expressive, creative, engaging
+  nova: { rate: 1.02, pitch: 1.0 },    // Intelligent and futuristic
+  luna: { rate: 0.96, pitch: 1.01 },   // Calm and supportive
+  spark: { rate: 1.05, pitch: 1.04 },  // Energetic and enthusiastic
+  atlas: { rate: 0.99, pitch: 0.95 },  // Knowledgeable and professional
+  zen: { rate: 0.94, pitch: 0.96 },    // Relaxed and thoughtful
 };
 
 export function cleanTextForSpeech(markdownText: string): string {
@@ -130,6 +135,9 @@ export interface UseSpeechSynthesisReturn {
   isSupported: boolean;
   isSpeaking: boolean;
   isPaused: boolean;
+  isMuted: boolean;
+  volume: number;
+  selectedVoiceURI: string | null;
   activeMessageId: string | null;
   lastSpokenText: string;
   lastSpokenLang: SupportedLanguage;
@@ -140,6 +148,9 @@ export interface UseSpeechSynthesisReturn {
   resume: () => void;
   stop: () => void;
   replay: () => void;
+  setVolume: (vol: number) => void;
+  toggleMute: () => void;
+  setSelectedVoiceURI: (uri: string | null) => void;
 }
 
 export function useSpeechSynthesis(
@@ -153,6 +164,9 @@ export function useSpeechSynthesis(
   );
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [volume, setVolumeState] = useState<number>(1.0);
+  const [selectedVoiceURI, setSelectedVoiceURIState] = useState<string | null>(null);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [lastSpokenText, setLastSpokenText] = useState<string>('');
   const [lastSpokenLang, setLastSpokenLang] =
@@ -162,6 +176,34 @@ export function useSpeechSynthesis(
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const playbackSessionRef = useRef<number>(0);
+
+  const setVolume = useCallback((vol: number) => {
+    const clamped = Math.max(0, Math.min(1, vol));
+    setVolumeState(clamped);
+    if (clamped > 0) {
+      setIsMuted(false);
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      if (next && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+        setIsSpeaking(false);
+        setIsPaused(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const setSelectedVoiceURI = useCallback((uri: string | null) => {
+    setSelectedVoiceURIState(uri);
+  }, []);
 
   useEffect(() => {
     if (!isSupported || typeof window === 'undefined') return;
@@ -225,6 +267,13 @@ export function useSpeechSynthesis(
       const cleaned = cleanTextForSpeech(rawText);
       if (!cleaned) return;
 
+      setLastSpokenText(cleaned);
+      setLastSpokenLang(lang);
+
+      if (isMuted || volume <= 0) {
+        return;
+      }
+
       setError(null);
       playbackSessionRef.current += 1;
       const currentSession = playbackSessionRef.current;
@@ -242,12 +291,13 @@ export function useSpeechSynthesis(
           availableVoices.length > 0
             ? availableVoices
             : window.speechSynthesis.getVoices();
-        const chosenVoice = selectBestVoice(voices, lang);
+        const manualVoice = selectedVoiceURI
+          ? voices.find((v) => v.voiceURI === selectedVoiceURI || v.name === selectedVoiceURI) || null
+          : null;
+        const chosenVoice = manualVoice || selectBestVoice(voices, lang);
         const prosody =
           COMPANION_VOICE_PROSODY[characterId] || COMPANION_VOICE_PROSODY.mellow;
 
-        setLastSpokenText(cleaned);
-        setLastSpokenLang(lang);
         setActiveMessageId(messageId ?? null);
 
         const speakChunkAt = (chunkIdx: number) => {
@@ -265,6 +315,7 @@ export function useSpeechSynthesis(
           utterance.lang = lang;
           utterance.rate = prosody.rate;
           utterance.pitch = prosody.pitch;
+          utterance.volume = volume;
 
           if (chosenVoice) {
             utterance.voice = chosenVoice;
@@ -337,7 +388,17 @@ export function useSpeechSynthesis(
         setVoiceErrorState(errObj.code, errObj.message);
       }
     },
-    [availableVoices, characterId, defaultLanguage, isSupported, setVoiceErrorState, transitionTo]
+    [
+      availableVoices,
+      characterId,
+      defaultLanguage,
+      isMuted,
+      isSupported,
+      selectedVoiceURI,
+      setVoiceErrorState,
+      transitionTo,
+      volume,
+    ]
   );
 
   const pause = useCallback(() => {
@@ -371,6 +432,9 @@ export function useSpeechSynthesis(
     isSupported,
     isSpeaking,
     isPaused,
+    isMuted,
+    volume,
+    selectedVoiceURI,
     activeMessageId,
     lastSpokenText,
     lastSpokenLang,
@@ -381,5 +445,8 @@ export function useSpeechSynthesis(
     resume,
     stop,
     replay,
+    setVolume,
+    toggleMute,
+    setSelectedVoiceURI,
   };
 }

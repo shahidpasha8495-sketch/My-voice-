@@ -12,6 +12,7 @@ import { VoiceStudio } from '../components/voice/VoiceStudio';
 import { useAuth } from '../hooks/useAuth';
 import { useCharacter } from '../hooks/useCharacter';
 import { useChat } from '../hooks/useChat';
+import { useConnectionHealth } from '../hooks/useConnectionHealth';
 import { useConversations } from '../hooks/useConversations';
 import { useLanguagePreference } from '../hooks/useLanguagePreference';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -22,6 +23,11 @@ import type { Conversation, InputMode, Message, SupportedLanguage } from '../typ
 export const DashboardPage: React.FC = () => {
   const { user, profile, updateProfile, signOut } = useAuth();
   const { characterId, selectCharacter } = useCharacter();
+  const {
+    connectionState,
+    isChecking: isCheckingConnection,
+    retryConnection,
+  } = useConnectionHealth();
   const {
     language,
     autoDetect,
@@ -47,6 +53,7 @@ export const DashboardPage: React.FC = () => {
     error: conversationError,
     selectConversation,
     startNewConversation,
+    renameConversation,
     deleteConversation,
     clearConversationError,
   } = useConversations();
@@ -179,6 +186,9 @@ export const DashboardPage: React.FC = () => {
       onNewConversation={handleNewConversation}
       onSelectConversation={handleSelectConversation}
       onRequestDeleteConversation={(conv) => setConversationToDelete(conv)}
+      onRenameConversation={(convId, newTitle) =>
+        renameConversation(convId, newTitle)
+      }
       onOpenSettings={() => setIsSettingsOpen(true)}
       onSignOut={() => void signOut()}
       onCloseMobile={closeMobile}
@@ -217,6 +227,9 @@ export const DashboardPage: React.FC = () => {
           isListening={speechRecognition.isListening}
           activeView={activeView}
           selectedCharacterId={characterId}
+          connectionState={connectionState}
+          isCheckingConnection={isCheckingConnection}
+          onRetryConnection={() => void retryConnection()}
           onChangeView={setActiveView}
           onLanguageChange={(nextLang) => void setLanguage(nextLang)}
           onToggleAutoSpeak={() => setAutoSpeakResponses(!autoSpeakResponses)}
@@ -255,6 +268,13 @@ export const DashboardPage: React.FC = () => {
             isSpeaking={speechSynthesis.isSpeaking}
             isPaused={speechSynthesis.isPaused}
             isSending={isSending}
+            volume={speechSynthesis.volume}
+            isMuted={speechSynthesis.isMuted}
+            availableVoices={speechSynthesis.availableVoices}
+            selectedVoiceURI={speechSynthesis.selectedVoiceURI}
+            onVolumeChange={speechSynthesis.setVolume}
+            onToggleMute={speechSynthesis.toggleMute}
+            onSelectVoiceURI={speechSynthesis.setSelectedVoiceURI}
             onSelectCharacter={selectCharacter}
             onStartListening={handleStartListening}
             onStopListening={speechRecognition.stopListening}
@@ -284,12 +304,17 @@ export const DashboardPage: React.FC = () => {
             isListening={speechRecognition.isListening}
             isSpeaking={speechSynthesis.isSpeaking}
             isPaused={speechSynthesis.isPaused}
+            isMuted={speechSynthesis.isMuted}
+            volume={speechSynthesis.volume}
             activeSpeakingMessageId={speechSynthesis.activeMessageId}
             hasReplayableResponse={Boolean(
               speechSynthesis.lastSpokenText || latestAssistantMessage
             )}
             selectedCharacterId={characterId}
             userDisplayName={profile?.display_name || user?.email?.split('@')[0]}
+            onRetryConnection={() => void retryConnection()}
+            onToggleMute={speechSynthesis.toggleMute}
+            onVolumeChange={speechSynthesis.setVolume}
             onSelectCharacter={selectCharacter}
             onOpenVoiceStudio={() => setActiveView('studio')}
             onOpenCharacterGallery={() => setActiveView('gallery')}
@@ -342,6 +367,13 @@ export const DashboardPage: React.FC = () => {
         isRecognitionSupported={speechRecognition.isSupported}
         isSynthesisSupported={speechSynthesis.isSupported}
         availableVoicesCount={speechSynthesis.availableVoices.length}
+        availableVoices={speechSynthesis.availableVoices}
+        selectedVoiceURI={speechSynthesis.selectedVoiceURI}
+        volume={speechSynthesis.volume}
+        selectedCharacterId={characterId}
+        onSelectVoiceURI={speechSynthesis.setSelectedVoiceURI}
+        onVolumeChange={speechSynthesis.setVolume}
+        onSelectCharacter={selectCharacter}
         onClose={() => setIsSettingsOpen(false)}
         onSaveProfile={handleSaveProfileSettings}
         onChangeAutoDetect={setAutoDetect}

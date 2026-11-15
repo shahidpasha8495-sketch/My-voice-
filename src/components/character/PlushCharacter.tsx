@@ -4,12 +4,13 @@ import {
   PLUSH_CHARACTERS,
   type PlushCharacterId,
 } from '../../config/characters';
-import type { VoiceState } from '../../types';
+import type { CompanionExpression, VoiceState } from '../../types';
 import { cn } from '../../utils/formatters';
 
 export interface PlushCharacterProps {
   characterId: PlushCharacterId;
   voiceState?: VoiceState;
+  expression?: CompanionExpression;
   amplitude?: number;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   interactive?: boolean;
@@ -28,6 +29,7 @@ const SIZE_MAP: Record<NonNullable<PlushCharacterProps['size']>, number> = {
 export const PlushCharacter: React.FC<PlushCharacterProps> = ({
   characterId,
   voiceState = 'idle',
+  expression,
   amplitude = 0,
   size = 'lg',
   interactive = true,
@@ -58,13 +60,21 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
   }, [prefersReducedMotion]);
 
   const isListening =
+    expression === 'listening' ||
     voiceState === 'listening' ||
     voiceState === 'speech_detected' ||
     voiceState === 'requesting_permission';
   const isThinking =
-    voiceState === 'processing' || voiceState === 'generating_response';
-  const isSpeaking = voiceState === 'speaking';
+    expression === 'thinking' ||
+    voiceState === 'processing' ||
+    voiceState === 'generating_response';
+  const isSpeaking = expression === 'speaking' || voiceState === 'speaking';
   const isError = voiceState === 'error';
+  const isConfused = expression === 'confused';
+  const isSad = expression === 'sad';
+  const isSleeping = expression === 'sleeping';
+  const isCelebrating = expression === 'celebrating';
+  const isExcitedState = isExcited || expression === 'excited' || isCelebrating;
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!interactive || prefersReducedMotion) return;
@@ -94,13 +104,14 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
       : 4;
 
   // Eye pupil offset for thinking/listening/interactive states
-  const pupilOffsetX = isThinking ? 3.5 : tilt.x * 0.35;
+  const pupilOffsetX = isThinking ? 3.5 : isConfused ? -3 : tilt.x * 0.35;
   const pupilOffsetY = isThinking ? -3.5 : isListening ? -1 : -tilt.y * 0.35;
 
   return (
     <motion.div
       data-testid={`plush-character-${characterId}`}
       data-character-state={voiceState}
+      data-character-expression={expression || 'happy'}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
       onClick={handleCharacterClick}
@@ -120,7 +131,7 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
       animate={
         prefersReducedMotion
           ? { y: 0, rotate: 0, scaleX: 1, scaleY: 1 }
-          : isExcited
+          : isExcitedState
             ? {
                 y: [0, -18, 2, -8, 0],
                 scaleX: [1, 0.92, 1.08, 0.97, 1],
@@ -141,36 +152,45 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
                     scaleY: [1, 1.03, 1],
                     rotate: [0, 2, -2, 0],
                   }
-                : isThinking
+                : isThinking || isConfused
                   ? {
                       y: [0, -7, 0],
-                      rotate: [-5, 6, -5],
+                      rotate: isConfused ? [-8, 8, -8] : [-5, 6, -5],
                     }
-                  : isError
+                  : isSleeping
                     ? {
-                        x: [0, -4, 4, -2, 2, 0],
-                        rotate: [-2, 2, 0],
+                        y: [0, 3, 0],
+                        scaleX: [1, 1.03, 1],
+                        scaleY: [1, 0.97, 1],
+                        rotate: [-2, 2, -2],
                       }
-                    : {
-                        // IDLE: gentle floating & breathing
-                        y: [0, -8, 0],
-                        scaleX: [1, 1.018, 1],
-                        scaleY: [1, 1.022, 1],
-                        rotate: [-1.2, 1.2, -1.2],
-                      }
+                    : isError
+                      ? {
+                          x: [0, -4, 4, -2, 2, 0],
+                          rotate: [-2, 2, 0],
+                        }
+                      : {
+                          // IDLE: gentle floating & breathing
+                          y: [0, -8, 0],
+                          scaleX: [1, 1.018, 1],
+                          scaleY: [1, 1.022, 1],
+                          rotate: [-1.2, 1.2, -1.2],
+                        }
       }
       transition={{
-        duration: isExcited
+        duration: isExcitedState
           ? 0.65
           : isSpeaking
             ? 0.72
             : isListening
               ? 1.35
-              : isThinking
+              : isThinking || isConfused
                 ? 1.9
-                : isError
-                  ? 0.5
-                  : 3.2,
+                : isSleeping
+                  ? 4.2
+                  : isError
+                    ? 0.5
+                    : 3.2,
         repeat: isError || isExcited ? 0 : Infinity,
         ease: 'easeInOut',
       }}
@@ -688,6 +708,99 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
         )}
 
         {/* ===============================================================
+            CHARACTERS 6-10: NOVA, LUNA, SPARK, ATLAS, ZEN
+           =============================================================== */}
+        {(characterId === 'nova' ||
+          characterId === 'luna' ||
+          characterId === 'spark' ||
+          characterId === 'atlas' ||
+          characterId === 'zen') && (
+          <g filter={`url(#plushFuzz-${characterId})`}>
+            {/* Little Plush Feet */}
+            <ellipse
+              cx="92"
+              cy="204"
+              rx="18"
+              ry="11"
+              fill={config.colors.secondary}
+            />
+            <ellipse
+              cx="148"
+              cy="204"
+              rx="18"
+              ry="11"
+              fill={config.colors.secondary}
+            />
+
+            {/* Crown / Halo / Lightning / Compass / Lotus Top Accent */}
+            {characterId === 'nova' && (
+              <ellipse
+                cx="120"
+                cy="38"
+                rx="42"
+                ry="9"
+                fill="none"
+                stroke="#22D3EE"
+                strokeWidth="3.5"
+                strokeDasharray="8 4"
+              />
+            )}
+            {characterId === 'luna' && (
+              <path
+                d="M 118 22 A 16 16 0 1 0 134 38 A 12 12 0 1 1 118 22 Z"
+                fill="#FDE047"
+              />
+            )}
+            {characterId === 'spark' && (
+              <polygon
+                points="124,16 110,38 121,38 115,54 134,32 122,32"
+                fill="#FEF08A"
+              />
+            )}
+            {characterId === 'atlas' && (
+              <polygon
+                points="120,18 124,30 136,34 124,38 120,50 116,38 104,34 116,30"
+                fill="#FBBF24"
+              />
+            )}
+            {characterId === 'zen' && (
+              <path
+                d="M 120 22 C 112 30 112 40 120 46 C 128 40 128 30 120 22 Z"
+                fill="#6EE7B7"
+              />
+            )}
+
+            {/* Rounded Plush Body */}
+            <ellipse
+              cx="120"
+              cy="132"
+              rx="68"
+              ry="66"
+              fill={config.colors.primary}
+            />
+            <ellipse
+              cx="120"
+              cy="128"
+              rx="52"
+              ry="46"
+              fill="#FFFFFF"
+              opacity="0.24"
+            />
+            <ellipse
+              cx="120"
+              cy="132"
+              rx="62"
+              ry="60"
+              fill="none"
+              stroke="#FFFFFF"
+              strokeWidth="2"
+              strokeDasharray="5 5"
+              opacity="0.5"
+            />
+          </g>
+        )}
+
+        {/* ===============================================================
             SHARED EXPRESSIVE FACIAL FEATURES (Eyes, Cheeks, Mouth, Accessories)
            =============================================================== */}
         <g
@@ -708,7 +821,7 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
             rx="11"
             ry="6.5"
             fill={config.colors.cheeks}
-            opacity={isListening || isSpeaking ? 0.85 : 0.65}
+            opacity={isListening || isSpeaking || isCelebrating ? 0.85 : 0.65}
           />
           <ellipse
             cx="156"
@@ -716,14 +829,19 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
             rx="11"
             ry="6.5"
             fill={config.colors.cheeks}
-            opacity={isListening || isSpeaking ? 0.85 : 0.65}
+            opacity={isListening || isSpeaking || isCelebrating ? 0.85 : 0.65}
           />
 
-          {/* Expressive Eyes (Blink + Pupil Tracking + Error Brows) */}
-          {isBlinking ? (
+          {/* Expressive Eyes (Blink + Sleeping + Celebrating + Pupil Tracking) */}
+          {isSleeping || isBlinking ? (
             <g stroke="#1E1B4B" strokeWidth="4" strokeLinecap="round" fill="none">
               <path d="M 88 120 Q 96 126 104 120" />
               <path d="M 136 120 Q 144 126 152 120" />
+            </g>
+          ) : isCelebrating ? (
+            <g stroke="#1E1B4B" strokeWidth="4" strokeLinecap="round" fill="none">
+              <path d="M 88 122 Q 96 112 104 122" />
+              <path d="M 136 122 Q 144 112 152 122" />
             </g>
           ) : (
             <g>
@@ -731,8 +849,8 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
               <ellipse
                 cx="96"
                 cy="118"
-                rx={isListening ? 9.5 : 8.5}
-                ry={isListening ? 11 : 10}
+                rx={isListening || isExcitedState ? 9.5 : 8.5}
+                ry={isListening || isExcitedState ? 11 : 10}
                 fill="#1E1B4B"
               />
               {/* Left Eye Dual Catchlights */}
@@ -754,8 +872,8 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
               <ellipse
                 cx="144"
                 cy="118"
-                rx={isListening ? 9.5 : 8.5}
-                ry={isListening ? 11 : 10}
+                rx={isListening || isExcitedState ? 9.5 : 8.5}
+                ry={isListening || isExcitedState ? 11 : 10}
                 fill="#1E1B4B"
               />
               {/* Right Eye Dual Catchlights */}
@@ -775,11 +893,17 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
             </g>
           )}
 
-          {/* Friendly Concerned Eyebrows on Error State */}
-          {isError && (
+          {/* Friendly Concerned / Sad / Confused Eyebrows */}
+          {(isError || isSad) && (
             <g stroke="#1E1B4B" strokeWidth="3" strokeLinecap="round">
               <line x1="86" y1="104" x2="102" y2="100" />
               <line x1="154" y1="104" x2="138" y2="100" />
+            </g>
+          )}
+          {isConfused && (
+            <g stroke="#1E1B4B" strokeWidth="3" strokeLinecap="round">
+              <line x1="86" y1="100" x2="102" y2="103" />
+              <line x1="138" y1="98" x2="154" y2="104" />
             </g>
           )}
 
@@ -903,7 +1027,7 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
             </g>
           )}
 
-          {/* Expressive Voice-Reactive Mouth */}
+          {/* Expressive Voice-Reactive & Emotion-Reactive Mouth */}
           {isSpeaking ? (
             <g>
               <rect
@@ -926,7 +1050,7 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
           ) : isListening ? (
             /* Attentive cute "o" / smile when listening */
             <ellipse cx="120" cy="139" rx="6" ry="5" fill="#9F1239" />
-          ) : isThinking ? (
+          ) : isThinking || isConfused ? (
             /* Thoughtful wavy pondering mouth */
             <path
               d="M 112 139 Q 117 136 121 139 Q 125 142 129 138"
@@ -935,6 +1059,18 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
               strokeWidth="3"
               strokeLinecap="round"
             />
+          ) : isSad ? (
+            /* Gentle sympathetic sad curve */
+            <path
+              d="M 111 143 Q 120 135 129 143"
+              fill="none"
+              stroke="#1E1B4B"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          ) : isSleeping ? (
+            /* Peaceful tiny sleeping breath o */
+            <circle cx="120" cy="139" r="3.5" fill="#1E1B4B" opacity="0.65" />
           ) : isError ? (
             /* Friendly apologetic "oops" mouth */
             <ellipse
@@ -961,7 +1097,38 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
         {/* ===============================================================
             CREATIVE CHARACTER-SPECIFIC REACTIVE AMBIENT PARTICLES
            =============================================================== */}
-        {(isThinking || isListening || isSpeaking || isExcited) && (
+        {isSleeping && (
+          <g fill="#A78BFA" fontWeight="bold" fontFamily="sans-serif">
+            <text x="172" y="68" fontSize="14" opacity="0.75">
+              z
+            </text>
+            <text x="184" y="52" fontSize="18" opacity="0.9">
+              Z
+            </text>
+            <text x="198" y="34" fontSize="22">
+              Z
+            </text>
+          </g>
+        )}
+
+        {isConfused && (
+          <g fill="#FBBF24" fontWeight="bold" fontFamily="sans-serif">
+            <text x="178" y="54" fontSize="26">
+              ?
+            </text>
+          </g>
+        )}
+
+        {isCelebrating && (
+          <g>
+            <circle cx="46" cy="46" r="5" fill="#F472B6" />
+            <circle cx="194" cy="42" r="5" fill="#22D3EE" />
+            <rect x="64" y="24" width="8" height="8" rx="2" fill="#FACC15" transform="rotate(20 64 24)" />
+            <rect x="168" y="24" width="8" height="8" rx="2" fill="#34D399" transform="rotate(-25 168 24)" />
+          </g>
+        )}
+
+        {(isThinking || isListening || isSpeaking || isExcitedState) && (
           <g opacity="0.92">
             {/* Sparkle Star Left */}
             <path

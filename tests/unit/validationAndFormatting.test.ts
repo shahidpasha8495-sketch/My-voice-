@@ -1,4 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { generateResilientCompanionReply } from '../../api/_lib/gemini';
+import {
+  getUvGuidance,
+  getWeatherDescription,
+} from '../../src/components/weather/WeatherUvWidget';
+import { ALL_COMPANION_LIST } from '../../src/config/characters';
+import { BACKGROUND_THEME_LIST } from '../../src/config/theme';
 import {
   formatMessageTimestamp,
   formatRelativeTime,
@@ -11,6 +18,7 @@ import {
   isSupportedLanguage,
   loginSchema,
   signupSchema,
+  updateConversationSchema,
   validateMessageInput,
 } from '../../src/utils/validation';
 
@@ -37,15 +45,23 @@ describe('Unit: Message Validation & Schemas', () => {
     expect(res.error).toMatch(/4,000/);
   });
 
-  it('validates supported languages accurately', () => {
+  it('validates all 11 supported languages accurately', () => {
     expect(isSupportedLanguage('en-US')).toBe(true);
     expect(isSupportedLanguage('hi-IN')).toBe(true);
     expect(isSupportedLanguage('kn-IN')).toBe(true);
-    expect(isSupportedLanguage('fr-FR')).toBe(false);
+    expect(isSupportedLanguage('ta-IN')).toBe(true);
+    expect(isSupportedLanguage('te-IN')).toBe(true);
+    expect(isSupportedLanguage('ml-IN')).toBe(true);
+    expect(isSupportedLanguage('bn-IN')).toBe(true);
+    expect(isSupportedLanguage('es-ES')).toBe(true);
+    expect(isSupportedLanguage('fr-FR')).toBe(true);
+    expect(isSupportedLanguage('de-DE')).toBe(true);
+    expect(isSupportedLanguage('ar-SA')).toBe(true);
+    expect(isSupportedLanguage('xx-XX')).toBe(false);
     expect(isSupportedLanguage(null)).toBe(false);
   });
 
-  it('validates backend chatRequestSchema with Zod', () => {
+  it('validates backend chatRequestSchema and updateConversationSchema with Zod', () => {
     const validPayload = {
       conversationId: '550e8400-e29b-41d4-a716-446655440000',
       message: 'Explain artificial intelligence',
@@ -63,9 +79,33 @@ describe('Unit: Message Validation & Schemas', () => {
 
     const invalidLang = chatRequestSchema.safeParse({
       ...validPayload,
-      language: 'es-ES',
+      language: 'xx-INVALID',
     });
     expect(invalidLang.success).toBe(false);
+
+    expect(
+      updateConversationSchema.safeParse({ title: 'Renamed Conversation' })
+        .success
+    ).toBe(true);
+  });
+
+  it('validates Weather & UV Index risk guidance, 6 themes, 10 companions, and resilient AI fallback', () => {
+    expect(getUvGuidance(1.5).category).toBe('Low');
+    expect(getUvGuidance(4.2).category).toBe('Moderate');
+    expect(getUvGuidance(7.0).category).toBe('High');
+    expect(getUvGuidance(9.5).category).toBe('Very High');
+    expect(getUvGuidance(11.5).category).toBe('Extreme');
+    expect(getWeatherDescription(0).label).toBe('Clear Sky');
+
+    expect(BACKGROUND_THEME_LIST).toHaveLength(6);
+    expect(ALL_COMPANION_LIST).toHaveLength(10);
+
+    const reply = generateResilientCompanionReply({
+      currentMessage: 'How can I stay productive today?',
+      language: 'en-US',
+      characterId: 'nova',
+    });
+    expect(reply.length).toBeGreaterThan(20);
   });
 
   it('validates login, signup, and createConversation schemas', () => {

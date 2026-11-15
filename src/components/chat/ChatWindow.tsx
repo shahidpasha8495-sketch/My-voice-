@@ -1,14 +1,17 @@
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
+  CalendarClock,
   Loader2,
   Radio,
+  RefreshCw,
   Sparkles,
   X,
 } from 'lucide-react';
 import React, { useEffect, useRef } from 'react';
 import {
   PLUSH_CHARACTERS,
+  getCharacterWelcome,
   getDailyGreeting,
   type PlushCharacterId,
 } from '../../config/characters';
@@ -17,6 +20,7 @@ import { FOLLOW_UP_QUICK_ACTIONS, getLanguageMetadata } from '../../utils/langua
 import { CharacterSelector } from '../character/CharacterSelector';
 import { VoiceControls } from '../voice/VoiceControls';
 import { VoiceOrb } from '../voice/VoiceOrb';
+import { WeatherUvWidget } from '../weather/WeatherUvWidget';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 
@@ -35,10 +39,15 @@ export interface ChatWindowProps {
   isListening: boolean;
   isSpeaking: boolean;
   isPaused: boolean;
+  isMuted?: boolean;
+  volume?: number;
   activeSpeakingMessageId: string | null;
   hasReplayableResponse: boolean;
   selectedCharacterId?: PlushCharacterId;
   userDisplayName?: string | null;
+  onRetryConnection?: () => void;
+  onToggleMute?: () => void;
+  onVolumeChange?: (volume: number) => void;
   onSelectCharacter?: (id: PlushCharacterId) => void;
   onOpenVoiceStudio?: () => void;
   onOpenCharacterGallery?: () => void;
@@ -70,10 +79,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   isListening,
   isSpeaking,
   isPaused,
+  isMuted = false,
+  volume = 1,
   activeSpeakingMessageId,
   hasReplayableResponse,
   selectedCharacterId = 'mellow',
   userDisplayName,
+  onRetryConnection,
+  onToggleMute,
+  onVolumeChange,
   onSelectCharacter,
   onOpenVoiceStudio,
   onOpenCharacterGallery,
@@ -94,6 +108,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const character =
     PLUSH_CHARACTERS[selectedCharacterId] || PLUSH_CHARACTERS.mellow;
   const dailyGreeting = getDailyGreeting(userDisplayName);
+  const formattedToday = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 
   useEffect(() => {
     bottomAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -121,14 +140,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{chatError}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={onDismissChatError}
-                  aria-label="Dismiss chat error"
-                  className="rounded-lg p-1 hover:bg-[#F87171]/20 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {onRetryConnection && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDismissChatError();
+                        onRetryConnection();
+                      }}
+                      className="inline-flex items-center gap-1 rounded-xl border border-[#F87171]/40 bg-[#F87171]/20 px-2.5 py-1 text-xs font-bold hover:bg-[#F87171]/30 transition-colors"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      <span>Retry Connection</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onDismissChatError}
+                    aria-label="Dismiss chat error"
+                    className="rounded-lg p-1 hover:bg-[#F87171]/20 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -167,11 +201,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             className="flex flex-col items-center justify-center py-2 sm:py-4 text-center"
             data-testid="empty-conversation-state"
           >
-            {/* Personalized Greeting & Tagline Pill */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-purple-300/60 dark:border-[#8B5CF6]/35 bg-white/80 dark:bg-[#191B30]/90 px-4 py-1 text-xs font-semibold text-[#8B5CF6] dark:text-[#22D3EE] shadow-sm mb-3 backdrop-blur-md">
+            {/* Personalized Greeting, Date & Tagline Pill */}
+            <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-purple-300/60 dark:border-[#8B5CF6]/35 bg-white/80 dark:bg-[#191B30]/90 px-4 py-1 text-xs font-semibold text-[#8B5CF6] dark:text-[#22D3EE] shadow-sm mb-3 backdrop-blur-md">
               <Sparkles className="h-3.5 w-3.5 text-[#F472B6]" />
               <span>
-                {dailyGreeting} · Your AI, Your Little Companion.
+                👋 {dailyGreeting} · Your AI, Your Little Companion.
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-[#A1A1B8]">
+                <CalendarClock className="h-3 w-3" />
+                {formattedToday}
               </span>
             </div>
 
@@ -212,7 +250,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </span>
               </div>
               <p className="mt-1.5 text-xs sm:text-sm italic text-slate-700 dark:text-[#F8FAFC]/90">
-                &ldquo;{character.welcomeMessages[language]}&rdquo;
+                &ldquo;{getCharacterWelcome(character, language)}&rdquo;
               </p>
             </div>
 
@@ -227,6 +265,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 isPaused={isPaused}
                 hasReplayableResponse={hasReplayableResponse}
                 disabled={isSending}
+                isMuted={isMuted}
+                volume={volume}
+                onToggleMute={onToggleMute}
+                onVolumeChange={onVolumeChange}
                 onStartListening={onStartListening}
                 onStopListening={onStopListening}
                 onCancelListening={onCancelListening}
@@ -248,6 +290,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               )}
             </div>
 
+            {/* Live Weather & UV Index Environmental Widget */}
+            <div className="w-full max-w-4xl mb-7">
+              <WeatherUvWidget />
+            </div>
+
             {/* 5-Character Interactive Selection Carousel */}
             {onSelectCharacter && (
               <div className="w-full max-w-4xl mb-7">
@@ -259,12 +306,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             )}
 
-            {/* Everyday Superpowers / Suggested Prompts */}
+            {/* Everyday Superpowers / Quick Actions */}
             <div className="w-full max-w-4xl">
               <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-[#72758E]">
                 Everyday Quick Actions ({langMeta.nativeName})
               </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {langMeta.suggestedPrompts.map((item, idx) => (
                   <motion.button
                     key={idx}
@@ -313,6 +360,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   isPaused={isPaused}
                   hasReplayableResponse={hasReplayableResponse}
                   disabled={isSending}
+                  isMuted={isMuted}
+                  volume={volume}
+                  onToggleMute={onToggleMute}
+                  onVolumeChange={onVolumeChange}
                   onStartListening={onStartListening}
                   onStopListening={onStopListening}
                   onCancelListening={onCancelListening}

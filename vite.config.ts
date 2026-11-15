@@ -75,9 +75,7 @@ function vercelApiLocalPlugin(): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   for (const [key, val] of Object.entries(env)) {
-    if (process.env[key] === undefined) {
-      process.env[key] = val;
-    }
+    process.env[key] = val;
   }
 
   return {

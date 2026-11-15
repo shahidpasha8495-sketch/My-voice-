@@ -4,17 +4,22 @@ import {
   MessageSquarePlus,
   Mic,
   Moon,
+  Palette,
   Radio,
+  RefreshCw,
   Settings,
   Sparkles,
   Sun,
   Volume2,
   VolumeX,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import React from 'react';
 import { PLUSH_CHARACTERS, type PlushCharacterId } from '../../config/characters';
+import { BACKGROUND_THEME_LIST } from '../../config/theme';
 import { useTheme } from '../../hooks/useTheme';
-import type { SupportedLanguage } from '../../types';
+import type { ConnectionState, SupportedLanguage } from '../../types';
 import { cn } from '../../utils/formatters';
 import { LanguageSelector } from '../common/LanguageSelector';
 import type { DashboardViewMode } from '../sidebar/Sidebar';
@@ -26,6 +31,9 @@ export interface ChatHeaderProps {
   isListening?: boolean;
   activeView?: DashboardViewMode;
   selectedCharacterId?: PlushCharacterId;
+  connectionState?: ConnectionState;
+  isCheckingConnection?: boolean;
+  onRetryConnection?: () => void;
   onChangeView?: (view: DashboardViewMode) => void;
   onLanguageChange: (lang: SupportedLanguage) => void;
   onToggleAutoSpeak: () => void;
@@ -41,6 +49,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   isListening = false,
   activeView = 'chat',
   selectedCharacterId = 'mellow',
+  connectionState = 'online',
+  isCheckingConnection = false,
+  onRetryConnection,
   onChangeView,
   onLanguageChange,
   onToggleAutoSpeak,
@@ -48,9 +59,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onOpenMobileSidebar,
   onOpenSettings,
 }) => {
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme, backgroundTheme, setBackgroundTheme } = useTheme();
   const character =
     PLUSH_CHARACTERS[selectedCharacterId] || PLUSH_CHARACTERS.mellow;
+
+  const cycleBackgroundTheme = () => {
+    const idx = BACKGROUND_THEME_LIST.findIndex((t) => t.id === backgroundTheme);
+    const next =
+      BACKGROUND_THEME_LIST[(idx + 1) % BACKGROUND_THEME_LIST.length];
+    if (next) {
+      setBackgroundTheme(next.id);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-purple-200/60 dark:border-white/10 bg-white/75 dark:bg-[#090B14]/85 px-3 py-3 sm:px-6 backdrop-blur-xl transition-colors duration-300">
@@ -69,7 +89,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1
                 className="truncate text-sm sm:text-base font-bold text-slate-900 dark:text-[#F8FAFC]"
                 title={conversationTitle}
@@ -88,6 +108,51 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 <Mic className="h-2.5 w-2.5" />
                 {isListening ? 'Mic Live' : `${character.name} Ready`}
               </span>
+
+              {/* Connection Status Indicator & Retry Button */}
+              <div
+                data-testid="connection-status-badge"
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border transition-all',
+                  connectionState === 'online'
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-[#34D399]'
+                    : connectionState === 'connecting' || isCheckingConnection
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-300'
+                      : 'bg-rose-500/15 border-rose-500/40 text-rose-600 dark:text-rose-400'
+                )}
+              >
+                {connectionState === 'offline' ? (
+                  <WifiOff className="h-2.5 w-2.5" />
+                ) : (
+                  <Wifi className="h-2.5 w-2.5" />
+                )}
+                <span>
+                  {connectionState === 'online'
+                    ? 'AI Online'
+                    : connectionState === 'connecting' || isCheckingConnection
+                      ? 'Connecting...'
+                      : 'Offline'}
+                </span>
+                {onRetryConnection && (
+                  <button
+                    type="button"
+                    onClick={onRetryConnection}
+                    title="Retry AI Connection"
+                    aria-label="Retry Connection"
+                    data-testid="retry-connection-button"
+                    className="ml-0.5 rounded p-0.5 hover:bg-white/15 transition-colors"
+                  >
+                    <RefreshCw
+                      className={cn(
+                        'h-2.5 w-2.5',
+                        (connectionState === 'connecting' ||
+                          isCheckingConnection) &&
+                          'animate-spin'
+                      )}
+                    />
+                  </button>
+                )}
+              </div>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-[#94A3B8] hidden sm:block">
               PLUSH AI • Meet your little intelligent companion ({character.name})
@@ -154,6 +219,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           compact={true}
           className="md:hidden"
         />
+
+        {/* Animated Background Theme Cycle Button */}
+        <button
+          type="button"
+          onClick={cycleBackgroundTheme}
+          aria-label="Cycle animated background theme"
+          title={`Background Theme: ${backgroundTheme} (Click to switch)`}
+          data-testid="cycle-background-theme-button"
+          className="hidden sm:inline-flex rounded-xl p-2 border border-purple-200/70 dark:border-white/10 bg-white/80 dark:bg-[#171B2B] text-slate-700 dark:text-[#F8FAFC] hover:border-[#22D3EE]/50 transition-colors"
+        >
+          <Palette className="h-4 w-4 text-[#22D3EE]" />
+        </button>
 
         {/* Dark / Light Theme Toggle */}
         <button
