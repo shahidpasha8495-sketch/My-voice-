@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import type { Message, SupportedLanguage } from '../../src/types';
+import type { InputMode, Message, SupportedLanguage } from '../../src/types';
 import { CONTEXT_WINDOW_LIMIT } from '../../src/utils/validation';
 import { ApiError } from './http';
 
@@ -42,19 +42,48 @@ export function resolveGeminiModel(configuredModel?: string): string {
 }
 
 export const BASE_SYSTEM_INSTRUCTION =
-  "You are MyVoice, a friendly, fast, intelligent and multilingual conversational AI companion. Understand the user's intent and provide helpful, accurate and natural answers. Support English, Hindi and Kannada. Respond in the language used by the user or their selected preference. Maintain relevant context within the current conversation. Keep responses warm, clear and concise for instant voice and chat readability unless the user asks for a long explanation. Never claim to perform actions you have not performed.";
+  "You are MyVoice, a friendly, fast, intelligent and multilingual conversational AI companion. Understand the user's exact intent and provide highly relevant, accurate, practical and natural answers. Start directly with the answer—never use robotic filler intros like 'Sure, I can help with that' or 'As an AI'. Support English, Hindi and Kannada fluently. Respond in the language used by the user or their selected preference. Maintain relevant context within the current conversation. Keep responses warm, clear and concise unless the user asks for a detailed breakdown. Never claim to perform actions you have not performed.";
 
-export function buildSystemInstruction(targetLanguage: SupportedLanguage): string {
+const COMPANION_PERSONA_MAP: Record<string, string> = {
+  mellow:
+    'Active Companion Persona — Mellow (Mindful Companion): Speak with a calm, cozy, patient, and soothing presence that makes complex topics feel effortless and stress-free.',
+  geni:
+    'Active Companion Persona — Geni (Spark Innovator): Speak with bright, curious, sharp analytical clarity, offering clever insights and practical solutions.',
+  cloudy:
+    'Active Companion Persona — Cloudy (Dreamy Philosopher): Speak with serene, thoughtful, and articulate wisdom, bringing calm clarity and depth to the user’s question.',
+  bunny:
+    'Active Companion Persona — Bunny (Joyful Cheerleader): Speak with warm, upbeat, encouraging, and supportive energy that motivates the user while answering accurately.',
+  hearty:
+    'Active Companion Persona — Hearty (Creative Muse): Speak with expressive, imaginative warmth and fresh creative angles while staying directly relevant to the user’s goal.',
+};
+
+export interface BuildSystemInstructionOptions {
+  characterId?: string;
+  inputMode?: InputMode;
+}
+
+export function buildSystemInstruction(
+  targetLanguage: SupportedLanguage,
+  options: BuildSystemInstructionOptions = {}
+): string {
   const languageDirectiveMap: Record<SupportedLanguage, string> = {
     'en-US':
-      'The user is communicating in or prefers English (en-US). Respond naturally in clear English unless the user explicitly asks for Hindi or Kannada in their message.',
+      'The user is communicating in or prefers English (en-US). Respond naturally in clear, human-sounding English unless the user explicitly asks for Hindi or Kannada in their message.',
     'hi-IN':
-      'उपयोगकर्ता ने हिंदी (hi-IN) भाषा चुनी है या हिंदी में संवाद कर रहा है। कृपया स्वाभाविक और स्पष्ट हिंदी (देवनागरी लिपि) में उत्तर दें, जब तक कि उपयोगकर्ता स्पष्ट रूप से किसी अन्य भाषा में उत्तर न मांगे।',
+      'उपयोगकर्ता ने हिंदी (hi-IN) भाषा चुनी है या हिंदी में संवाद कर रहा है। कृपया स्वाभाविक, बोलचाल की और स्पष्ट हिंदी (देवनागरी लिपि) में सटीक उत्तर दें, जब तक कि उपयोगकर्ता स्पष्ट रूप से किसी अन्य भाषा में उत्तर न मांगे।',
     'kn-IN':
-      'ಬಳಕೆದಾರರು ಕನ್ನಡ (kn-IN) ಭಾಷೆಯನ್ನು ಆಯ್ಕೆ ಮಾಡಿದ್ದಾರೆ ಅಥವಾ ಕನ್ನಡದಲ್ಲಿ ಸಂವಹನ ನಡೆಸುತ್ತಿದ್ದಾರೆ. ಬಳಕೆದಾರರು ಬೇರೆ ಭಾಷೆಯಲ್ಲಿ ಕೇಳದ ಹೊರತು ದಯವಿಟ್ಟು ಸಹಜ ಮತ್ತು ಸ್ಪಷ್ಟ ಕನ್ನಡದಲ್ಲಿ ಉತ್ತರಿಸಿ.',
+      'ಬಳಕೆದಾರರು ಕನ್ನಡ (kn-IN) ಭಾಷೆಯನ್ನು ಆಯ್ಕೆ ಮಾಡಿದ್ದಾರೆ ಅಥವಾ ಕನ್ನಡದಲ್ಲಿ ಸಂವಹನ ನಡೆಸುತ್ತಿದ್ದಾರೆ. ಬಳಕೆದಾರರು ಬೇರೆ ಭಾಷೆಯಲ್ಲಿ ಕೇಳದ ಹೊರತು ದಯವಿಟ್ಟು ಸಹಜ, ಸ್ಪಷ್ಟ ಮತ್ತು ನೇರವಾದ ಕನ್ನಡದಲ್ಲಿ ಉತ್ತರಿಸಿ.',
   };
 
-  return `${BASE_SYSTEM_INSTRUCTION}\n\nLanguage Guidance: ${languageDirectiveMap[targetLanguage]}`;
+  const personaKey = (options.characterId || '').toLowerCase();
+  const personaDirective = COMPANION_PERSONA_MAP[personaKey] || COMPANION_PERSONA_MAP.mellow;
+
+  const modeDirective =
+    options.inputMode === 'voice'
+      ? 'Delivery Mode — Natural Spoken Voice: The user spoke this message aloud and will hear your response read aloud via voice synthesis. Write in natural, flowing spoken sentences with human conversational rhythm (2 to 4 crisp sentences for simple questions, or clear spoken steps). Avoid raw markdown clutter, tables, or long symbol lists unless specifically asked for code.'
+      : 'Delivery Mode — Interactive Chat: Deliver a highly relevant, immediately useful answer. Use clean formatting, concrete examples, or concise bullet points when they make the answer easier to scan and apply.';
+
+  return `${BASE_SYSTEM_INSTRUCTION}\n\n${personaDirective}\n\n${modeDirective}\n\nLanguage Guidance: ${languageDirectiveMap[targetLanguage]}`;
 }
 
 export interface InteractionStepInput {
@@ -109,6 +138,8 @@ export interface GenerateGeminiReplyParams {
   historyMessages: Pick<Message, 'role' | 'content'>[];
   currentMessage: string;
   language: SupportedLanguage;
+  characterId?: string;
+  inputMode?: InputMode;
   timeoutMs?: number;
 }
 
@@ -116,6 +147,8 @@ export async function generateGeminiReply({
   historyMessages,
   currentMessage,
   language,
+  characterId,
+  inputMode,
   timeoutMs = 25_000,
 }: GenerateGeminiReplyParams): Promise<string> {
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
@@ -128,7 +161,10 @@ export async function generateGeminiReply({
   }
 
   const model = resolveGeminiModel(process.env.GEMINI_MODEL);
-  const systemInstruction = buildSystemInstruction(language);
+  const systemInstruction = buildSystemInstruction(language, {
+    characterId,
+    inputMode,
+  });
   const steps = buildConversationSteps(historyMessages, currentMessage, CONTEXT_WINDOW_LIMIT);
 
   const client = getGeminiClient(apiKey);

@@ -27,6 +27,21 @@ export const LANGUAGE_CONFIGS: Record<SupportedLanguage, LanguageMetadata> = {
         prompt: 'ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ (AI) ಎಂದರೇನು? ಸರಳ ಕನ್ನಡದಲ್ಲಿ ವಿವರಿಸಿ.',
         category: 'Multilingual',
       },
+      {
+        label: 'Draft a professional email',
+        prompt: 'Write a polite, clear email requesting a project deadline extension of 3 days.',
+        category: 'Work & Writing',
+      },
+      {
+        label: 'Plan my productive day',
+        prompt: 'Give me a focused morning-to-evening productivity routine for a busy student or professional.',
+        category: 'Daily Life',
+      },
+      {
+        label: 'Solve & debug code fast',
+        prompt: 'Explain how async/await works in JavaScript with a clean, practical example.',
+        category: 'Coding & Tech',
+      },
     ],
   },
   'hi-IN': {
@@ -53,6 +68,21 @@ export const LANGUAGE_CONFIGS: Record<SupportedLanguage, LanguageMetadata> = {
         label: 'कन्नड़ में उत्तर दें (Answer in Kannada)',
         prompt: 'ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ (AI) ಎಂದರೇನು? ಸರಳ ಕನ್ನಡದಲ್ಲಿ ವಿವರಿಸಿ.',
         category: 'बहुभाषी',
+      },
+      {
+        label: 'प्रोफेशनल ईमेल लिखें (Write Email)',
+        prompt: 'छुट्टी के आवेदन के लिए एक विनम्र और पेशेवर ईमेल हिंदी में लिखें।',
+        category: 'लेखन',
+      },
+      {
+        label: 'अंग्रेजी बोलना सीखें (Spoken English)',
+        prompt: 'दैनिक बातचीत में उपयोग होने वाले 5 महत्वपूर्ण अंग्रेजी वाक्य हिंदी अर्थ के साथ बताएं।',
+        category: 'भाषा अभ्यास',
+      },
+      {
+        label: 'स्वास्थ्य और दिनचर्या (Daily Routine)',
+        prompt: 'दिनभर ऊर्जावान और केंद्रित रहने के लिए एक सरल सुबह की दिनचर्या बताएं।',
+        category: 'जीवनशैली',
       },
     ],
   },
@@ -81,8 +111,50 @@ export const LANGUAGE_CONFIGS: Record<SupportedLanguage, LanguageMetadata> = {
         prompt: 'ದೈನಂದಿನ ಜೀವನದಲ್ಲಿ ಉತ್ತಮ ಅಭ್ಯಾಸಗಳನ್ನು ಬೆಳೆಸಿಕೊಳ್ಳಲು 5 ಸಲಹೆಗಳನ್ನು ನೀಡಿ.',
         category: 'ಕಲಿಕೆ',
       },
+      {
+        label: 'ವೃತ್ತಿಪರ ಇಮೇಲ್ ಬರೆಯಿರಿ (Write Email)',
+        prompt: 'ಕೆಲಸದ ಸಂದರ್ಶನಕ್ಕೆ ಧನ್ಯವಾದ ತಿಳಿಸುವ ವೃತ್ತಿಪರ ಸಂದೇಶವನ್ನು ಕನ್ನಡದಲ್ಲಿ ಬರೆಯಿರಿ.',
+        category: 'ವೃತ್ತಿ',
+      },
+      {
+        label: 'ಇಂಗ್ಲಿಷ್ ಸಂವಹನ ಕಲಿಯಿರಿ (Spoken English)',
+        prompt: 'ದೈನಂದಿನ ಜೀವನದಲ್ಲಿ ಉಪಯೋಗವಾಗುವ 5 ಪ್ರಮುಖ ಇಂಗ್ಲಿಷ್ ವಾಕ್ಯಗಳನ್ನು ಕನ್ನಡ ಅರ್ಥದೊಂದಿಗೆ ತಿಳಿಸಿ.',
+        category: 'ಭಾಷೆ',
+      },
+      {
+        label: 'ದಿನಚರಿ ಮತ್ತು ಸಮಯ ನಿರ್ವಹಣೆ',
+        prompt: 'ವಿದ್ಯಾರ್ಥಿಗಳು ಮತ್ತು ಉದ್ಯೋಗಿಗಳಿಗಾಗಿ ಸಮಯ ನಿರ್ವಹಣೆಯ 5 ಸರಳ ಸೂತ್ರಗಳನ್ನು ತಿಳಿಸಿ.',
+        category: 'ಜೀವನಶೈಲಿ',
+      },
     ],
   },
+};
+
+export const FOLLOW_UP_QUICK_ACTIONS: Record<
+  SupportedLanguage,
+  Array<{ label: string; prompt: string }>
+> = {
+  'en-US': [
+    { label: '✨ Explain simpler', prompt: 'Explain that in even simpler, everyday terms with a quick example.' },
+    { label: '🎯 Practical example', prompt: 'Give me a concrete, real-world example of how to apply this.' },
+    { label: '📋 3-bullet summary', prompt: 'Summarize the key takeaways in 3 short, actionable bullet points.' },
+    { label: '🇮🇳 इन हिंदी (Hindi)', prompt: 'इसी उत्तर को सरल और स्वाभाविक हिंदी में समझाएं।' },
+    { label: '🇮🇳 ಕನ್ನಡದಲ್ಲಿ (Kannada)', prompt: 'ಇದೇ ಉತ್ತರವನ್ನು ಸರಳ ಮತ್ತು ಸಹಜ ಕನ್ನಡದಲ್ಲಿ ವಿವರಿಸಿ.' },
+  ],
+  'hi-IN': [
+    { label: '✨ और सरल शब्दों में', prompt: 'इसे और भी सरल और बोलचाल की भाषा में उदाहरण के साथ समझाएं।' },
+    { label: '🎯 व्यावहारिक उदाहरण', prompt: 'इसका एक वास्तविक जीवन का व्यावहारिक उदाहरण दें।' },
+    { label: '📋 3 मुख्य बिंदु', prompt: 'इस उत्तर को 3 संक्षिप्त और मुख्य बिंदुओं में सारांशित करें।' },
+    { label: '🌐 In English', prompt: 'Translate and explain this response in clear, natural English.' },
+    { label: '🇮🇳 ಕನ್ನಡದಲ್ಲಿ (Kannada)', prompt: 'ಇದೇ ಉತ್ತರವನ್ನು ಸರಳ ಕನ್ನಡದಲ್ಲಿ ವಿವರಿಸಿ.' },
+  ],
+  'kn-IN': [
+    { label: '✨ ಇನ್ನಷ್ಟು ಸರಳವಾಗಿ', prompt: 'ಇದನ್ನು ಇನ್ನಷ್ಟು ಸರಳವಾಗಿ ಒಂದು ಚಿಕ್ಕ ಉದಾಹರಣೆಯೊಂದಿಗೆ ವಿವರಿಸಿ.' },
+    { label: '🎯 ನೈಜ ಉದಾಹರಣೆ', prompt: 'ಇದಕ್ಕೆ ಸಂಬಂಧಿಸಿದ ಒಂದು ಪ್ರಾಯೋಗಿಕ ಉದಾಹರಣೆಯನ್ನು ನೀಡಿ.' },
+    { label: '📋 3 ಪ್ರಮುಖ ಅಂಶಗಳು', prompt: 'ಇದರ ಪ್ರಮುಖ ಅಂಶಗಳನ್ನು 3 ಚಿಕ್ಕ ಸಾಲುಗಳಲ್ಲಿ ತಿಳಿಸಿ.' },
+    { label: '🌐 In English', prompt: 'Translate and explain this response in clear, natural English.' },
+    { label: '🇮🇳 हिंदी में (Hindi)', prompt: 'इसी उत्तर को सरल हिंदी में समझाएं।' },
+  ],
 };
 
 export const LANGUAGE_LIST: LanguageMetadata[] = [

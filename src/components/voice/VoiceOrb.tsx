@@ -124,6 +124,57 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
           )}
         />
 
+        {/* Creative Sonic Ripple Waves when Listening, Thinking, or Speaking */}
+        {!prefersReducedMotion && (isListening || isSpeaking || isProcessing) && (
+          <>
+            <motion.div
+              aria-hidden="true"
+              initial={{ scale: 0.78, opacity: 0.65 }}
+              animate={{ scale: 1.24, opacity: 0 }}
+              transition={{
+                duration: isSpeaking ? 1.6 : 2.1,
+                repeat: Infinity,
+                ease: 'easeOut',
+              }}
+              style={{
+                width: orbPixelSize * 0.82,
+                height: orbPixelSize * 0.82,
+              }}
+              className={cn(
+                'pointer-events-none absolute rounded-full border-2',
+                isListening
+                  ? 'border-[#22D3EE]/50'
+                  : isSpeaking
+                    ? 'border-[#34D399]/50'
+                    : 'border-[#A855F7]/50'
+              )}
+            />
+            <motion.div
+              aria-hidden="true"
+              initial={{ scale: 0.78, opacity: 0.5 }}
+              animate={{ scale: 1.32, opacity: 0 }}
+              transition={{
+                duration: isSpeaking ? 1.6 : 2.1,
+                delay: 0.75,
+                repeat: Infinity,
+                ease: 'easeOut',
+              }}
+              style={{
+                width: orbPixelSize * 0.82,
+                height: orbPixelSize * 0.82,
+              }}
+              className={cn(
+                'pointer-events-none absolute rounded-full border',
+                isListening
+                  ? 'border-[#8B5CF6]/45'
+                  : isSpeaking
+                    ? 'border-[#22D3EE]/45'
+                    : 'border-[#F472B6]/45'
+              )}
+            />
+          </>
+        )}
+
         {/* Secondary Concentric Glowing Ring */}
         <motion.div
           aria-hidden="true"
@@ -132,12 +183,36 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
               ? undefined
               : { rotate: 360 }
           }
-          transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
+          transition={{
+            duration: isProcessing ? 6 : isListening || isSpeaking ? 10 : 18,
+            repeat: Infinity,
+            ease: 'linear',
+          }}
           style={{
             width: orbPixelSize * 0.86,
             height: orbPixelSize * 0.86,
           }}
-          className="pointer-events-none absolute rounded-full border border-dashed border-[#8B5CF6]/30 dark:border-[#22D3EE]/25"
+          className="pointer-events-none absolute rounded-full border border-dashed border-[#8B5CF6]/35 dark:border-[#22D3EE]/30"
+        />
+
+        {/* Counter-Rotating Inner Aurora Ring */}
+        <motion.div
+          aria-hidden="true"
+          animate={
+            prefersReducedMotion
+              ? undefined
+              : { rotate: -360 }
+          }
+          transition={{
+            duration: isProcessing ? 8 : 24,
+            repeat: Infinity,
+            ease: 'linear',
+          }}
+          style={{
+            width: orbPixelSize * 0.92,
+            height: orbPixelSize * 0.92,
+          }}
+          className="pointer-events-none absolute rounded-full border border-dotted border-[#F472B6]/25 dark:border-[#A855F7]/25"
         />
 
         {/* Subtle Floating Orbital Particles */}

@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { PlushCharacterId } from '../config/characters';
 import type { SupportedLanguage, VoiceError } from '../types';
+import { useCharacter } from './useCharacter';
 import { useVoiceState } from './useVoiceState';
+
+export const COMPANION_VOICE_PROSODY: Record<
+  PlushCharacterId,
+  { rate: number; pitch: number }
+> = {
+  mellow: { rate: 0.97, pitch: 0.98 }, // Calm, cozy, soothing
+  geni: { rate: 1.04, pitch: 1.03 },   // Bright, energetic, articulate
+  cloudy: { rate: 0.95, pitch: 0.97 }, // Serene, unhurried, thoughtful
+  bunny: { rate: 1.03, pitch: 1.05 },  // Warm, cheerful, encouraging
+  hearty: { rate: 1.01, pitch: 1.02 }, // Expressive, creative, engaging
+};
 
 export function cleanTextForSpeech(markdownText: string): string {
   return markdownText
@@ -8,10 +21,75 @@ export function cleanTextForSpeech(markdownText: string): string {
     .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/^[#>*\-\s]+/gm, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/^[\s>*\-•]+/gm, '')
+    .replace(/^[#]+\s*/gm, '')
     .replace(/[*_~]+/g, '')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Splits cleaned text into natural sentence-level chunks so the first sentence
+ * begins speaking immediately with zero lag and natural human breathing pauses.
+ */
+export function splitIntoNaturalSpeechChunks(cleanedText: string, maxChunkLen = 200): string[] {
+  const trimmed = cleanedText.trim();
+  if (!trimmed) return [];
+  if (trimmed.length <= maxChunkLen) return [trimmed];
+
+  // Split after sentence-ending punctuation (. ! ? ।) followed by space
+  const rawSentences = trimmed
+    .split(/(?<=[.!?।])\s+/u)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const sentence of rawSentences) {
+    if (!current) {
+      current = sentence;
+    } else if (current.length + 1 + sentence.length <= maxChunkLen) {
+      current = `${current} ${sentence}`;
+    } else {
+      chunks.push(current);
+      current = sentence;
+    }
+  }
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks.length > 0 ? chunks : [trimmed];
+}
+
+function scoreVoiceQuality(voice: SpeechSynthesisVoice): number {
+  let score = 0;
+  const name = voice.name.toLowerCase();
+
+  // Highest priority: Neural, Natural, Google, Online, Enhanced, Premium, Siri
+  if (/natural|neural|online/i.test(name)) score += 60;
+  if (/google|siri|premium|enhanced|studio/i.test(name)) score += 50;
+  if (
+    /aria|jenny|guy|sonia|ryan|samantha|ava|allison|swara|madhur|neerja|prabhat|sapna|gagan|lekha|rishi|kiyara|soumya/i.test(
+      name
+    )
+  ) {
+    score += 40;
+  }
+
+  // Penalize robotic novelty voices
+  if (
+    /albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|junior|organ|trinoids|whisper|zarvox|espeak|compact/i.test(
+      name
+    )
+  ) {
+    score -= 100;
+  }
+
+  return score;
 }
 
 export function selectBestVoice(
@@ -23,15 +101,15 @@ export function selectBestVoice(
   const normalizedTarget = targetLang.toLowerCase();
   const langPrefix = normalizedTarget.split('-')[0];
 
-  // 1. Exact BCP-47 language match (prefer local or Google/natural voices)
+  // 1. Exact BCP-47 language match (sorted by natural voice quality score)
   const exactMatches = voices.filter(
     (v) => v.lang.toLowerCase().replace('_', '-') === normalizedTarget
   );
   if (exactMatches.length > 0) {
-    const preferred = exactMatches.find((v) =>
-      /natural|google|neural|premium/i.test(v.name)
+    const sorted = [...exactMatches].sort(
+      (a, b) => scoreVoiceQuality(b) - scoreVoiceQuality(a)
     );
-    return preferred || exactMatches[0];
+    return sorted[0];
   }
 
   // 2. Language prefix match (e.g. 'hi', 'kn', 'en')
@@ -39,10 +117,10 @@ export function selectBestVoice(
     v.lang.toLowerCase().replace('_', '-').startsWith(langPrefix)
   );
   if (prefixMatches.length > 0) {
-    const preferred = prefixMatches.find((v) =>
-      /natural|google|neural|premium/i.test(v.name)
+    const sorted = [...prefixMatches].sort(
+      (a, b) => scoreVoiceQuality(b) - scoreVoiceQuality(a)
     );
-    return preferred || prefixMatches[0];
+    return sorted[0];
   }
 
   return null;
@@ -68,6 +146,7 @@ export function useSpeechSynthesis(
   defaultLanguage: SupportedLanguage = 'en-US'
 ): UseSpeechSynthesisReturn {
   const { transitionTo, setVoiceErrorState } = useVoiceState();
+  const { characterId } = useCharacter();
 
   const [isSupported] = useState<boolean>(
     () => typeof window !== 'undefined' && 'speechSynthesis' in window
@@ -82,6 +161,7 @@ export function useSpeechSynthesis(
   const [error, setError] = useState<VoiceError | null>(null);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const playbackSessionRef = useRef<number>(0);
 
   useEffect(() => {
     if (!isSupported || typeof window === 'undefined') return;
@@ -112,6 +192,7 @@ export function useSpeechSynthesis(
   }, [isSupported]);
 
   const stop = useCallback(() => {
+    playbackSessionRef.current += 1;
     if (!isSupported || typeof window === 'undefined') return;
     try {
       window.speechSynthesis.cancel();
@@ -145,6 +226,8 @@ export function useSpeechSynthesis(
       if (!cleaned) return;
 
       setError(null);
+      playbackSessionRef.current += 1;
+      const currentSession = playbackSessionRef.current;
 
       // Always cancel any existing playback before starting new playback
       try {
@@ -154,72 +237,97 @@ export function useSpeechSynthesis(
       }
 
       try {
-        const utterance = new SpeechSynthesisUtterance(cleaned);
-        utterance.lang = lang;
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-
+        const chunks = splitIntoNaturalSpeechChunks(cleaned);
         const voices =
           availableVoices.length > 0
             ? availableVoices
             : window.speechSynthesis.getVoices();
         const chosenVoice = selectBestVoice(voices, lang);
-        if (chosenVoice) {
-          utterance.voice = chosenVoice;
-        }
+        const prosody =
+          COMPANION_VOICE_PROSODY[characterId] || COMPANION_VOICE_PROSODY.mellow;
 
-        utterance.onstart = () => {
-          setIsSpeaking(true);
-          setIsPaused(false);
-          setActiveMessageId(messageId ?? null);
-          setLastSpokenText(cleaned);
-          setLastSpokenLang(lang);
-          transitionTo('speaking');
-        };
-
-        utterance.onpause = () => {
-          setIsPaused(true);
-          transitionTo('paused');
-        };
-
-        utterance.onresume = () => {
-          setIsPaused(false);
-          transitionTo('speaking');
-        };
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setIsPaused(false);
-          setActiveMessageId(null);
-          utteranceRef.current = null;
-          transitionTo('idle');
-        };
-
-        utterance.onerror = (event) => {
-          // 'canceled' and 'interrupted' are expected when stopping/switching playback
-          if (event.error === 'canceled' || event.error === 'interrupted') {
-            setIsSpeaking(false);
-            setIsPaused(false);
-            setActiveMessageId(null);
-            return;
-          }
-
-          const errObj: VoiceError = {
-            code: 'SYNTHESIS_UNAVAILABLE',
-            message: 'Unable to play spoken audio for this response.',
-          };
-          setError(errObj);
-          setIsSpeaking(false);
-          setIsPaused(false);
-          setActiveMessageId(null);
-          setVoiceErrorState(errObj.code, errObj.message);
-        };
-
-        utteranceRef.current = utterance;
         setLastSpokenText(cleaned);
         setLastSpokenLang(lang);
         setActiveMessageId(messageId ?? null);
-        window.speechSynthesis.speak(utterance);
+
+        const speakChunkAt = (chunkIdx: number) => {
+          if (playbackSessionRef.current !== currentSession) return;
+          if (chunkIdx >= chunks.length) {
+            setIsSpeaking(false);
+            setIsPaused(false);
+            setActiveMessageId(null);
+            utteranceRef.current = null;
+            transitionTo('idle');
+            return;
+          }
+
+          const utterance = new SpeechSynthesisUtterance(chunks[chunkIdx]);
+          utterance.lang = lang;
+          utterance.rate = prosody.rate;
+          utterance.pitch = prosody.pitch;
+
+          if (chosenVoice) {
+            utterance.voice = chosenVoice;
+          }
+
+          utterance.onstart = () => {
+            if (playbackSessionRef.current !== currentSession) return;
+            setIsSpeaking(true);
+            setIsPaused(false);
+            setActiveMessageId(messageId ?? null);
+            transitionTo('speaking');
+          };
+
+          utterance.onpause = () => {
+            if (playbackSessionRef.current !== currentSession) return;
+            setIsPaused(true);
+            transitionTo('paused');
+          };
+
+          utterance.onresume = () => {
+            if (playbackSessionRef.current !== currentSession) return;
+            setIsPaused(false);
+            transitionTo('speaking');
+          };
+
+          utterance.onend = () => {
+            if (playbackSessionRef.current !== currentSession) return;
+            if (chunkIdx + 1 < chunks.length) {
+              speakChunkAt(chunkIdx + 1);
+            } else {
+              setIsSpeaking(false);
+              setIsPaused(false);
+              setActiveMessageId(null);
+              utteranceRef.current = null;
+              transitionTo('idle');
+            }
+          };
+
+          utterance.onerror = (event) => {
+            if (playbackSessionRef.current !== currentSession) return;
+            if (event.error === 'canceled' || event.error === 'interrupted') {
+              setIsSpeaking(false);
+              setIsPaused(false);
+              setActiveMessageId(null);
+              return;
+            }
+
+            const errObj: VoiceError = {
+              code: 'SYNTHESIS_UNAVAILABLE',
+              message: 'Unable to play spoken audio for this response.',
+            };
+            setError(errObj);
+            setIsSpeaking(false);
+            setIsPaused(false);
+            setActiveMessageId(null);
+            setVoiceErrorState(errObj.code, errObj.message);
+          };
+
+          utteranceRef.current = utterance;
+          window.speechSynthesis.speak(utterance);
+        };
+
+        speakChunkAt(0);
       } catch {
         const errObj: VoiceError = {
           code: 'SYNTHESIS_UNAVAILABLE',
@@ -229,7 +337,7 @@ export function useSpeechSynthesis(
         setVoiceErrorState(errObj.code, errObj.message);
       }
     },
-    [availableVoices, defaultLanguage, isSupported, setVoiceErrorState, transitionTo]
+    [availableVoices, characterId, defaultLanguage, isSupported, setVoiceErrorState, transitionTo]
   );
 
   const pause = useCallback(() => {

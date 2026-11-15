@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import {
   AlertCircle,
   Loader2,
@@ -12,7 +13,7 @@ import {
   type PlushCharacterId,
 } from '../../config/characters';
 import type { Message, SupportedLanguage, VoiceState } from '../../types';
-import { getLanguageMetadata } from '../../utils/language';
+import { FOLLOW_UP_QUICK_ACTIONS, getLanguageMetadata } from '../../utils/language';
 import { CharacterSelector } from '../character/CharacterSelector';
 import { VoiceControls } from '../voice/VoiceControls';
 import { VoiceOrb } from '../voice/VoiceOrb';
@@ -258,17 +259,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             )}
 
-            {/* Suggested Prompts */}
+            {/* Everyday Superpowers / Suggested Prompts */}
             <div className="w-full max-w-4xl">
               <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-[#72758E]">
-                Suggested Prompts ({langMeta.nativeName})
+                Everyday Quick Actions ({langMeta.nativeName})
               </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {langMeta.suggestedPrompts.map((item, idx) => (
-                  <button
+                  <motion.button
                     key={idx}
                     type="button"
                     disabled={isSending}
+                    whileHover={{ y: -3, scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => onSelectSuggestedPrompt(item.prompt)}
                     className="group flex flex-col items-start justify-between rounded-2xl border border-purple-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#191B30]/90 p-4 text-left transition-all hover:border-[#8B5CF6]/60 hover:shadow-glow-primary backdrop-blur-md"
                   >
@@ -281,7 +284,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <span className="mt-1 text-xs text-slate-600 dark:text-[#A1A1B8] line-clamp-2">
                       {item.prompt}
                     </span>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
@@ -337,6 +340,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               ))}
 
               {isSending && <TypingIndicator />}
+
+              {/* Smart 1-Click Follow-Up Actions after Assistant Response */}
+              {!isSending &&
+                messages.length > 0 &&
+                messages[messages.length - 1]?.role === 'assistant' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="flex flex-wrap items-center gap-2 pl-12 pt-1"
+                    data-testid="smart-followup-chips"
+                  >
+                    {(FOLLOW_UP_QUICK_ACTIONS[language] || FOLLOW_UP_QUICK_ACTIONS['en-US']).map(
+                      (action, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => onSelectSuggestedPrompt(action.prompt)}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-purple-200/70 dark:border-white/[0.09] bg-white/85 dark:bg-[#191B30]/90 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-[#F8FAFC] hover:border-[#8B5CF6] hover:text-[#8B5CF6] dark:hover:border-[#22D3EE] dark:hover:text-[#22D3EE] transition-all shadow-sm"
+                        >
+                          <span>{action.label}</span>
+                        </button>
+                      )
+                    )}
+                  </motion.div>
+                )}
             </div>
           </>
         )}

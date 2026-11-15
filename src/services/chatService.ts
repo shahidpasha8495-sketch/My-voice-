@@ -52,6 +52,8 @@ export async function sendChatMessage(
         message: validation.sanitized,
         language: payload.language,
         inputMode: payload.inputMode,
+        characterId: payload.characterId,
+        history: payload.history,
       }),
     });
   } catch {

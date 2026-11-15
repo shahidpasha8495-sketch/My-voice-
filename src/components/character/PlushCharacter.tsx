@@ -39,16 +39,17 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
   const pixelSize = SIZE_MAP[size];
 
   const [isBlinking, setIsBlinking] = useState(false);
+  const [isExcited, setIsExcited] = useState(false);
   const [tilt, setTilt] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Natural eye-blinking cycle every ~3.6 seconds
+  // Natural eye-blinking cycle every ~3.4 seconds
   useEffect(() => {
     if (prefersReducedMotion) return;
     let blinkTimeout: ReturnType<typeof setTimeout> | null = null;
     const interval = setInterval(() => {
       setIsBlinking(true);
       blinkTimeout = setTimeout(() => setIsBlinking(false), 150);
-    }, 3600);
+    }, 3400);
 
     return () => {
       clearInterval(interval);
@@ -70,11 +71,19 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
     const rect = e.currentTarget.getBoundingClientRect();
     const relX = (e.clientX - rect.left) / rect.width - 0.5;
     const relY = (e.clientY - rect.top) / rect.height - 0.5;
-    setTilt({ x: relX * 10, y: -relY * 10 });
+    setTilt({ x: relX * 14, y: -relY * 14 });
   };
 
   const handlePointerLeave = () => {
     setTilt({ x: 0, y: 0 });
+  };
+
+  const handleCharacterClick = () => {
+    if (!prefersReducedMotion) {
+      setIsExcited(true);
+      setTimeout(() => setIsExcited(false), 650);
+    }
+    onClick?.();
   };
 
   // Dynamic mouth openness driven by speaking state & real audio amplitude
@@ -94,7 +103,7 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
       data-character-state={voiceState}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
-      onClick={onClick}
+      onClick={handleCharacterClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       aria-label={`${config.name} plush companion (${config.personality}) - ${voiceState}`}
@@ -103,7 +112,7 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
           ? (e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                onClick();
+                handleCharacterClick();
               }
             }
           : undefined
@@ -111,49 +120,58 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
       animate={
         prefersReducedMotion
           ? { y: 0, rotate: 0, scaleX: 1, scaleY: 1 }
-          : isSpeaking
+          : isExcited
             ? {
-                y: [0, -10, 0, -6, 0],
-                scaleX: [1, 1.04, 0.97, 1.03, 1],
-                scaleY: [1, 0.96, 1.05, 0.98, 1],
-                rotate: [0, -2, 2, -1, 0],
+                y: [0, -18, 2, -8, 0],
+                scaleX: [1, 0.92, 1.08, 0.97, 1],
+                scaleY: [1, 1.1, 0.9, 1.04, 1],
+                rotate: [0, -6, 6, -3, 0],
               }
-            : isListening
+            : isSpeaking
               ? {
-                  y: [0, -5, 0],
-                  scaleX: [1, 1.03, 1],
-                  scaleY: [1, 1.03, 1],
-                  rotate: [0, 1.5, -1.5, 0],
+                  y: [0, -10, 0, -6, 0],
+                  scaleX: [1, 1.05, 0.96, 1.04, 1],
+                  scaleY: [1, 0.95, 1.06, 0.97, 1],
+                  rotate: [0, -2.5, 2.5, -1.5, 0],
                 }
-              : isThinking
+              : isListening
                 ? {
-                    y: [0, -6, 0],
-                    rotate: [-5, 6, -5],
+                    y: [0, -5, 0],
+                    scaleX: [1, 1.03, 1],
+                    scaleY: [1, 1.03, 1],
+                    rotate: [0, 2, -2, 0],
                   }
-                : isError
+                : isThinking
                   ? {
-                      x: [0, -4, 4, -2, 2, 0],
-                      rotate: [-2, 2, 0],
+                      y: [0, -7, 0],
+                      rotate: [-5, 6, -5],
                     }
-                  : {
-                      // IDLE: gentle floating & breathing
-                      y: [0, -8, 0],
-                      scaleX: [1, 1.015, 1],
-                      scaleY: [1, 1.02, 1],
-                      rotate: [-1, 1, -1],
-                    }
+                  : isError
+                    ? {
+                        x: [0, -4, 4, -2, 2, 0],
+                        rotate: [-2, 2, 0],
+                      }
+                    : {
+                        // IDLE: gentle floating & breathing
+                        y: [0, -8, 0],
+                        scaleX: [1, 1.018, 1],
+                        scaleY: [1, 1.022, 1],
+                        rotate: [-1.2, 1.2, -1.2],
+                      }
       }
       transition={{
-        duration: isSpeaking
-          ? 0.75
-          : isListening
-            ? 1.4
-            : isThinking
-              ? 2.0
-              : isError
-                ? 0.5
-                : 3.4,
-        repeat: isError ? 0 : Infinity,
+        duration: isExcited
+          ? 0.65
+          : isSpeaking
+            ? 0.72
+            : isListening
+              ? 1.35
+              : isThinking
+                ? 1.9
+                : isError
+                  ? 0.5
+                  : 3.2,
+        repeat: isError || isExcited ? 0 : Infinity,
         ease: 'easeInOut',
       }}
       style={{
@@ -940,12 +958,35 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
           )}
         </g>
 
-        {/* Floating Thought / Listening Sparkles */}
-        {(isThinking || isListening) && (
-          <g fill={isListening ? '#22D3EE' : '#C084FC'} opacity="0.9">
-            <circle cx="42" cy="56" r="4" />
-            <circle cx="198" cy="52" r="5" />
-            <circle cx="182" cy="30" r="3" />
+        {/* ===============================================================
+            CREATIVE CHARACTER-SPECIFIC REACTIVE AMBIENT PARTICLES
+           =============================================================== */}
+        {(isThinking || isListening || isSpeaking || isExcited) && (
+          <g opacity="0.92">
+            {/* Sparkle Star Left */}
+            <path
+              d="M 40 48 L 43 55 L 50 58 L 43 61 L 40 68 L 37 61 L 30 58 L 37 55 Z"
+              fill={isListening ? '#22D3EE' : isSpeaking ? '#34D399' : '#C084FC'}
+            />
+            {/* Sparkle Star Right */}
+            <path
+              d="M 198 44 L 200.5 50 L 206.5 52.5 L 200.5 55 L 198 61 L 195.5 55 L 189.5 52.5 L 195.5 50 Z"
+              fill={config.colors.accent}
+            />
+            {/* Floating Mini Heart / Music Note / Eureka Sparkle */}
+            {characterId === 'hearty' || characterId === 'bunny' ? (
+              <path
+                d="M 182 28 C 179 23 172 24 172 29 C 172 34 182 40 182 40 C 182 40 192 34 192 29 C 192 24 185 23 182 28 Z"
+                fill="#F472B6"
+              />
+            ) : characterId === 'geni' ? (
+              <polygon
+                points="120,10 123,18 131,18 125,23 127,31 120,26 113,31 115,23 109,18 117,18"
+                fill="#FDE047"
+              />
+            ) : (
+              <circle cx="182" cy="30" r="4.5" fill="#22D3EE" />
+            )}
           </g>
         )}
       </svg>

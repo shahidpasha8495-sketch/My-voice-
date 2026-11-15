@@ -35,6 +35,16 @@ export const chatRequestSchema = z.object({
   message: messageContentSchema,
   language: supportedLanguageSchema,
   inputMode: inputModeSchema.default('text'),
+  characterId: z.string().max(32).optional(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().max(MAX_MESSAGE_LENGTH * 2),
+      })
+    )
+    .max(CONTEXT_WINDOW_LIMIT)
+    .optional(),
 });
 
 export const createConversationSchema = z.object({

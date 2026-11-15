@@ -1,8 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
+  COMPANION_VOICE_PROSODY,
   cleanTextForSpeech,
   selectBestVoice,
+  splitIntoNaturalSpeechChunks,
 } from '../../src/hooks/useSpeechSynthesis';
 import { useVoiceStateStandalone } from '../../src/hooks/useVoiceState';
 import {
@@ -126,5 +128,12 @@ describe('Unit: Voice Interaction States (All 9 Mandatory States)', () => {
     expect(selectBestVoice(mockVoices, 'kn-IN')?.name).toBe('Google ಕನ್ನಡ');
     expect(selectBestVoice(mockVoices, 'hi-IN')?.name).toBe('Google हिन्दी');
     expect(selectBestVoice(mockVoices, 'en-US')?.name).toBe('English US Standard');
+
+    const chunks = splitIntoNaturalSpeechChunks(
+      'First natural sentence is spoken right away. Second sentence follows smoothly! Third sentence completes the thought.',
+      60
+    );
+    expect(chunks.length).toBe(3);
+    expect(COMPANION_VOICE_PROSODY.mellow.rate).toBeGreaterThan(0.9);
   });
 });

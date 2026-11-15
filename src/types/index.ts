@@ -90,6 +90,8 @@ export interface ChatRequestPayload {
   message: string;
   language: SupportedLanguage;
   inputMode: InputMode;
+  characterId?: string;
+  history?: Array<Pick<Message, 'role' | 'content'>>;
 }
 
 export interface ChatResponsePayload {

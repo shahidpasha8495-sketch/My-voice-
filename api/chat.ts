@@ -58,14 +58,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         throw new ApiError(400, firstIssue, 'VALIDATION_ERROR');
       }
 
-      const { conversationId, message, language, inputMode } = parsed.data;
+      const { conversationId, message, language, inputMode, characterId, history } = parsed.data;
       const detection = detectMessageLanguage(message, language);
       const effectiveLanguage = detection.language;
 
       const aiReplyText = await generateGeminiReply({
-        historyMessages: [],
+        historyMessages: history ?? [],
         currentMessage: message,
         language: effectiveLanguage,
+        characterId,
+        inputMode,
       });
 
       const nowIso = new Date().toISOString();
@@ -124,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       throw new ApiError(400, firstIssue, 'VALIDATION_ERROR');
     }
 
-    const { conversationId, message, language, inputMode } = parsed.data;
+    const { conversationId, message, language, inputMode, characterId } = parsed.data;
 
     // 5. Verify conversation ownership using the authenticated user's RLS client
     const userSupabase = createUserSupabaseClient(identity.accessToken);
@@ -178,6 +180,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       historyMessages: chronologicalHistory,
       currentMessage: message,
       language: effectiveLanguage,
+      characterId,
+      inputMode,
     });
 
     const [{ data: savedUserMessage, error: userInsertError }, aiReplyText] =

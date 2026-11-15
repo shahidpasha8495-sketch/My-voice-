@@ -4,6 +4,7 @@ import { getConversationWithMessages } from '../services/conversationService';
 import type { InputMode, Message, SupportedLanguage } from '../types';
 import { validateMessageInput } from '../utils/validation';
 import { useAuth } from './useAuth';
+import { useCharacter } from './useCharacter';
 import { useConversations } from './useConversations';
 import { useLanguagePreference } from './useLanguagePreference';
 import { useVoiceState } from './useVoiceState';
@@ -29,6 +30,7 @@ export interface UseChatReturn {
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const { onAssistantResponse } = options;
   const { accessToken } = useAuth();
+  const { characterId } = useCharacter();
   const {
     activeConversationId,
     ensureActiveConversation,
@@ -45,6 +47,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const isSubmittingRef = useRef<boolean>(false);
   const skipNextFetchForConvRef = useRef<string | null>(null);
   const onAssistantResponseRef = useRef(onAssistantResponse);
+  const messagesRef = useRef<Message[]>([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     onAssistantResponseRef.current = onAssistantResponse;
@@ -147,12 +154,19 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           skipNextFetchForConvRef.current = createdConv.id;
         }
 
+        const recentHistory = messagesRef.current
+          .filter((m) => !m.id.startsWith('optimistic-'))
+          .slice(-20)
+          .map((m) => ({ role: m.role, content: m.content }));
+
         const response = await sendChatMessage(
           {
             conversationId: targetConversationId,
             message: validation.sanitized,
             language: effectiveLanguage,
             inputMode,
+            characterId,
+            history: recentHistory,
           },
           accessToken
         );
@@ -193,6 +207,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     [
       accessToken,
       activeConversationId,
+      characterId,
       ensureActiveConversation,
       resolveEffectiveLanguage,
       touchConversation,
