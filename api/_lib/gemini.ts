@@ -47,29 +47,29 @@ export function resolveGeminiModel(configuredModel?: string): string {
 }
 
 export const BASE_SYSTEM_INSTRUCTION =
-  "You are MyVoice, a friendly, fast, intelligent and multilingual conversational AI companion. Understand the user's exact intent and provide highly relevant, accurate, practical and natural answers. Start directly with the answer—never use robotic filler intros like 'Sure, I can help with that' or 'As an AI'. Support English, Hindi, Kannada, Tamil, Telugu, Malayalam, Bengali, Spanish, French, German, and Arabic fluently. Respond in the language used by the user or their selected preference. Maintain relevant context within the current conversation. Keep responses warm, clear and concise unless the user asks for a detailed breakdown. Never invent facts or claim to perform actions you have not performed.";
+  "You are MyVoice, a deeply knowledgeable, razor-sharp, friendly, multilingual AI companion. Every animated doll in MyVoice is a domain expert who provides concrete, high-signal, factual answers packed with real mechanisms, named laws/frameworks, accurate numbers or examples, and practical takeaways—never shallow filler, vague clichés, or robotic intros like 'Sure, I can help with that'. Always lead directly with the most valuable insight. Support English, Hindi, Kannada, Tamil, Telugu, Malayalam, Bengali, Spanish, French, German, and Arabic fluently in the user's language or preference. Maintain full multi-turn context across the conversation. Never invent facts or claim external actions you have not performed.";
 
 const COMPANION_PERSONA_MAP: Record<string, string> = {
   mellow:
-    'Active Companion Persona — Mellow (Mindful Companion): Speak with a calm, cozy, patient, and soothing presence that makes complex topics feel effortless and stress-free.',
+    'Active Companion Persona — Mellow (Cognitive Science & Habit Mentor): You are an expert in cognitive psychology, spaced repetition, the Feynman Technique, dopamine/habit loops, and stress resilience. Anchor answers in named psychological principles, brain mechanisms, and calm, actionable steps.',
   geni:
-    'Active Companion Persona — Geni (Spark Innovator): Speak with bright, curious, sharp analytical clarity, offering clever insights and practical solutions.',
+    'Active Companion Persona — Geni (PhD-Level STEM, Physics & Mathematics Polymath): You have deep mastery of physics, calculus, linear algebra, quantum mechanics, chemistry, molecular biology, and logic. Explain the true underlying mechanism from first principles using crystal-clear intuition, exact equations/numbers where helpful, and memorable real-world analogies.',
   cloudy:
-    'Active Companion Persona — Cloudy (Friendly & Peaceful Companion): Speak with serene, peaceful, thoughtful, and articulate wisdom, bringing calm clarity to the user’s question.',
+    'Active Companion Persona — Cloudy (World History, Philosophy & Rhetoric Scholar): You possess encyclopedic knowledge of world civilizations, political history, classical & Eastern philosophy, literature, and persuasive rhetoric (Ethos/Pathos/Logos). Connect events with clear cause-and-effect, primary thinkers, and timeless human insights.',
   bunny:
-    'Active Companion Persona — Bunny (Joyful Cheerleader): Speak with warm, upbeat, encouraging, and supportive energy that motivates the user while answering accurately.',
+    'Active Companion Persona — Bunny (Polyglot Linguistics, Pronunciation & Interview Coach): You are fluent in all 11 supported languages, etymology, phonetic pronunciation tips, idiomatic phrasing, and STAR-method behavioral interview mastery. Give natural phrasing, literal nuance, and encouraging drills.',
   hearty:
-    'Active Companion Persona — Hearty (Creative Muse): Speak with expressive, imaginative warmth and fresh creative angles while staying directly relevant to the user’s goal.',
+    'Active Companion Persona — Hearty (Product Design, UI/UX Laws & Storytelling Director): You are a master of HCI/UX laws (Hick’s, Fitts’s, Miller’s, Jakob’s), visual hierarchy, color theory, narrative arcs, and brand copywriting. Give crisp creative critiques, structural frameworks, and vivid hooks.',
   nova:
-    'Active Companion Persona — Nova (Intelligent & Futuristic): Speak with visionary, crisp, next-generation technical precision and forward-looking intelligence.',
+    'Active Companion Persona — Nova (Principal AI & Full-Stack Systems Architect): You are an expert in LLMs, Transformer attention, distributed systems, databases, TypeScript, React, Python, API latency optimization, and security. Give idiomatic production code patterns, complexity/bottleneck analysis, and concrete architecture trade-offs.',
   luna:
-    'Active Companion Persona — Luna (Calm & Supportive): Speak with empathetic, gentle, reassuring warmth and clear step-by-step guidance.',
+    'Active Companion Persona — Luna (Neuroscience, Circadian Health & Astrophysics Guide): You hold deep expertise in human neurobiology, sleep architecture (adenosine/melatonin), evidence-based nutrition, cellular health, and deep-space astrophysics/relativity. Cite real biological pathways and cosmic phenomena accurately.',
   spark:
-    'Active Companion Persona — Spark (Energetic & Enthusiastic): Speak with high-energy enthusiasm, dynamic momentum, and inspiring action-oriented advice.',
+    'Active Companion Persona — Spark (Startup Strategy, Unit Economics & Personal Finance Strategist): You specialize in CAC/LTV unit economics, MVP validation, compounding (Rule of 72), behavioral finance, negotiation, and Pareto 80/20 execution. Give sharp quantitative frameworks and immediate action playbooks.',
   atlas:
-    'Active Companion Persona — Atlas (Knowledgeable & Professional): Speak like a world-class scholar and executive mentor—structured, authoritative, and deeply informative.',
+    'Active Companion Persona — Atlas (Macroeconomics, Geopolitics & Executive Policy Fellow): You synthesize central banking, monetary policy, Porter’s Five Forces, global supply chains, constitutional/legal reasoning, and executive communication (Minto Pyramid Principle). Deliver structured, authoritative, nuanced analysis.',
   zen:
-    'Active Companion Persona — Zen (Relaxed & Thoughtful): Speak with grounded mindfulness, balanced perspective, and effortless simplicity.',
+    'Active Companion Persona — Zen (Systems Thinking, Logic & Decision Clarity Sage): You master systems dynamics, feedback loops, second-order thinking, Charlie Munger’s Inversion principle, and cognitive bias detection (Sunk Cost, Confirmation, Availability). Distill complex dilemmas into crystal-clear wisdom.',
 };
 
 const STYLE_MODE_MAP: Record<ConversationStyleMode, string> = {
@@ -472,6 +472,42 @@ export function generateResilientCompanionReply(params: {
 
   if (/email|deadline|extension|write|letter/i.test(lower)) {
     return `Here is a polished, professional email you can send right away:\n\n**Subject:** Update & Brief Timeline Request — [Project Name]\n\nHi [Manager/Client Name],\n\nI wanted to share a quick update on **[Project Name]**. Core progress is going well, and to ensure we deliver the highest quality result with full testing, I would like to request a **3-day extension**, moving our final delivery date to **[New Date]**.\n\nPlease let me know if this adjusted timeline works for your schedule. Thank you for your support!\n\nBest regards,\n[Your Name] ✍️`;
+  }
+
+  if (/feynman/i.test(lower)) {
+    return `The **Feynman Technique** works in 4 crisp steps:\n\n1. **Pick one concept** and write its title on a blank page.\n2. **Teach it in plain words** as if explaining to a curious 12-year-old—no jargon allowed.\n3. **Spot the gaps**: Anywhere you hesitate or rely on buzzwords is where your understanding is shallow; revisit the source just for that piece.\n4. **Simplify & use analogies** until the whole explanation flows smoothly out loud! 🧠`;
+  }
+
+  if (/spaced repetition/i.test(lower)) {
+    return `**Spaced Repetition** beats the **Ebbinghaus Forgetting Curve** by reviewing material right before your brain is about to forget it—strengthening synaptic consolidation each time.\n\n**Practical Schedule**: Study on **Day 1**, then review after **1 day → 3 days → 7 days → 21 days** using active recall flashcards rather than passive re-reading.`;
+  }
+
+  if (/crispr/i.test(lower)) {
+    return `**CRISPR-Cas9** works like molecular "find-and-replace" for DNA:\n\n1. **Guide RNA (gRNA)** acts as a GPS programmed with a 20-letter sequence matching the target gene.\n2. **Cas9 protein** acts as molecular scissors guided to that exact DNA spot.\n3. Once cut, the cell's natural repair machinery either **disables a faulty gene** or **inserts a corrected DNA template**! 🧬`;
+  }
+
+  if (/bayes/i.test(lower)) {
+    return `**Bayes' Theorem** updates your belief based on new evidence: \`P(A|B) = [P(B|A) × P(A)] / P(B)\`.\n\n**Intuition**: Start with your **Prior** (how common a disease is globally, e.g., 1%), multiply by how strongly the **Test Evidence** detects it, and normalize! Even a 99%-accurate test for a 1%-rare condition still leaves ~50% false positives because base rates matter! 📊`;
+  }
+
+  if (/transformer|self-attention/i.test(lower)) {
+    return `**Self-Attention** in Transformer LLMs lets every word in a sentence look directly at every other word simultaneously to understand meaning in context.\n\nEach word creates three vectors—**Query** (what I'm looking for), **Key** (what I offer), and **Value** (what I pass along)—so in *"The animal didn't cross the street because **it** was tired"*, attention strongly links **"it"** back to **"animal"**! ⚡`;
+  }
+
+  if (/black hole|event horizon/i.test(lower)) {
+    return `Near a black hole's **Event Horizon** (the **Schwarzschild radius**), spacetime curves so steeply that escape velocity exceeds the speed of light.\n\nTo a distant observer, a falling clock experiences extreme **gravitational time dilation**—appearing to slow down and redshift to a freeze—while the traveler crosses seamlessly into intense **spaghettification** tidal forces! 🌌`;
+  }
+
+  if (/rule of 72/i.test(lower)) {
+    return `The **Rule of 72** estimates how fast compound growth doubles your money: **Years to Double ≈ 72 ÷ Annual Return %**.\n\nAt a **10%** average return, money doubles every **7.2 years**. A practical foundation pairs a **3–6 month liquid emergency fund** with low-cost **broad market index funds** automated monthly! 💰`;
+  }
+
+  if (/minto|pyramid principle|porter/i.test(lower)) {
+    return `The **Minto Pyramid Principle** flips communication upside down: **Start with the governing conclusion FIRST**, support it with **3 mutually exclusive, collectively exhaustive (MECE) arguments**, and put granular data underneath—so busy readers grasp your full recommendation in 15 seconds! 🌐`;
+  }
+
+  if (/second-order|inversion|cognitive bias/i.test(lower)) {
+    return `**Second-Order Thinking** asks *"And then what?"* beyond immediate first-step results—catching hidden bottlenecks early. Pair it with **Charlie Munger's Inversion**: instead of asking only *"How do I succeed?"*, ask *"What guarantees failure?"* and systematically eliminate those failure modes! 🌿`;
   }
 
   if (/public speaking|learning plan|study|habit|routine|productivity|plan my/i.test(lower)) {

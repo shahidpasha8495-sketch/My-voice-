@@ -12,11 +12,19 @@ export type PlushCharacterId =
   | 'atlas'
   | 'zen';
 
+export interface ExpertPromptSuggestion {
+  topic: string;
+  label: string;
+  prompt: string;
+}
+
 export interface PlushCharacterConfig {
   id: PlushCharacterId;
   name: string;
   emoji: string;
   role: string;
+  knowledgeLevel: string;
+  expertiseField: string;
   personality: string;
   shortTrait: string;
   description: string;
@@ -45,6 +53,7 @@ export interface PlushCharacterConfig {
     'kn-IN': string;
   };
   specialtyBadges: string[];
+  expertPrompts: ExpertPromptSuggestion[];
 }
 
 export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = {
@@ -53,10 +62,12 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     name: 'Mellow',
     emoji: '🎧',
     role: 'Mindful Companion',
+    knowledgeLevel: 'Cognitive & Habit Mentor',
+    expertiseField: 'Psychology, Active Recall & Mental Models',
     personality: 'Calm and helpful',
     shortTrait: 'Cozy • Patient • Clear',
     description:
-      'Beige fuzzy hooded mascot with studio-black headphones and warm rosy cheeks. Mellow brings a soothing, patient presence to every question.',
+      'Beige fuzzy hooded mascot with studio-black headphones and warm rosy cheeks. Master of cognitive science, stress-free learning, and habit architecture.',
     accessory: 'Matte Black Studio Headphones & Cozy Plush Hood',
     silhouetteDescription: 'Rounded fuzzy hooded plush silhouette',
     colors: {
@@ -73,28 +84,47 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Hi there, I'm Mellow! Put on your cozy headphones—let's talk through anything at your own pace.",
+        "Hi there, I'm Mellow! Put on your cozy headphones—let's untangle complex topics calmly and clearly.",
       'hi-IN':
         'नमस्ते, मैं मेलो हूँ! आराम से बोलिए या लिखिए—मैं शांत और सरल शब्दों में आपकी मदद करने के लिए यहाँ हूँ।',
       'kn-IN':
         'ನಮಸ್ಕಾರ, ನಾನು ಮೆಲ್ಲೊ! ಆರಾಮವಾಗಿ ಮಾತನಾಡಿ ಅಥವಾ ಟೈಪ್ ಮಾಡಿ — ನಾನು ನಿಮಗೆ ಶಾಂತವಾಗಿ ಮತ್ತು ಸ್ಪಷ್ಟವಾಗಿ ಸಹಾಯ ಮಾಡುತ್ತೇನೆ.',
     },
     voicePreviewLine: {
-      'en-US': "Hi, I'm Mellow! I'm calm, cozy, and always happy to help you think things through.",
+      'en-US': "Hi, I'm Mellow! Let's break down big ideas calmly with proven mental models.",
       'hi-IN': 'नमस्ते, मैं मेलो हूँ! मैं शांत और मददगार साथी हूँ।',
       'kn-IN': 'ನಮಸ್ಕಾರ, ನಾನು ಮೆಲ್ಲೊ! ನಾನು ನಿಮ್ಮ ಶಾಂತ ಮತ್ತು ಸಹಾಯಕ ಮಿತ್ರ.',
     },
-    specialtyBadges: ['Calm Explanations', 'Daily Reflection', 'Gentle Tutoring'],
+    specialtyBadges: ['Cognitive Science', 'Habit Systems', 'Feynman Learning'],
+    expertPrompts: [
+      {
+        topic: 'Learning',
+        label: 'Feynman Technique',
+        prompt: 'Explain the Feynman Technique and how I can use it to master hard subjects 3x faster.',
+      },
+      {
+        topic: 'Focus',
+        label: 'Beat Procrastination',
+        prompt: 'Using behavioral psychology, give me a 3-step method to overcome procrastination today.',
+      },
+      {
+        topic: 'Memory',
+        label: 'Spaced Repetition',
+        prompt: 'How does spaced repetition rewire long-term memory in the brain? Give a practical schedule.',
+      },
+    ],
   },
   geni: {
     id: 'geni',
     name: 'Geni',
     emoji: '💡',
     role: 'Spark Innovator',
+    knowledgeLevel: 'STEM & Logic Polymath',
+    expertiseField: 'Physics, Mathematics, Chemistry & Proofs',
     personality: 'Intelligent and energetic',
     shortTrait: 'Curious • Sharp • Witty',
     description:
-      'Golden-yellow triangular plush mascot sporting round scholar glasses and a dapper bow tie. Geni loves untangling tricky concepts with infectious energy.',
+      'Golden-yellow scholar plush sporting round optical frames and a velvet bow tie. Unlocks physics, math, chemistry, and scientific breakthroughs from first principles.',
     accessory: 'Round Scholar Glasses & Velvet Bow Tie',
     silhouetteDescription: 'Soft triangular pyramid plush silhouette',
     colors: {
@@ -111,28 +141,47 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Hey! I'm Geni—glasses polished, bow tie straight! Ready to brainstorm, code, or learn something fascinating?",
+        "Hey! I'm Geni—glasses polished, bow tie straight! Ask me about quantum physics, calculus, or deep science puzzles!",
       'hi-IN':
-        'नमस्ते! मैं जेनी हूँ—चश्मा और बो-टाई तैयार है! चलिए आज कुछ नया और रोमांचक सीखते हैं!',
+        'नमस्ते! मैं जेनी हूँ—चश्मा और बो-टाई तैयार है! चलिए आज विज्ञान, गणित और नए विचारों को गहराई से समझते हैं!',
       'kn-IN':
-        'ನಮಸ್ಕಾರ! ನಾನು ಜೆನಿ — ಹೊಸ ವಿಚಾರಗಳನ್ನು ಮತ್ತು ವಿಜ್ಞಾನವನ್ನು ಉತ್ಸಾಹದಿಂದ ಕಲಿಯೋಣ ಬನ್ನಿ!',
+        'ನಮಸ್ಕಾರ! ನಾನು ಜೆನಿ — ವಿಜ್ಞಾನ, ಗಣಿತ ಮತ್ತು ತಂತ್ರಜ್ಞಾನವನ್ನು ಆಳವಾಗಿ ಮತ್ತು ಉತ್ಸಾಹದಿಂದ ಕಲಿಯೋಣ ಬನ್ನಿ!',
     },
     voicePreviewLine: {
-      'en-US': "Eureka! I'm Geni, your energetic little scholar! Let's solve big ideas together!",
-      'hi-IN': 'नमस्ते! मैं जेनी हूँ, आपका ऊर्जावान और बुद्धिमान साथी!',
-      'kn-IN': 'ನಮಸ್ಕಾರ! ನಾನು ಜೆನಿ, ನಿಮ್ಮ ಉತ್ಸಾಹಿ ಮತ್ತು ಬುದ್ಧಿವಂತ ಒಡನಾಡಿ!',
+      'en-US': "Eureka! I'm Geni, your STEM scholar—ready to unpack physics, math, and big breakthroughs!",
+      'hi-IN': 'नमस्ते! मैं जेनी हूँ, आपका ऊर्जावान और बुद्धिमान विज्ञान साथी!',
+      'kn-IN': 'ನಮಸ್ಕಾರ! ನಾನು ಜೆನಿ, ನಿಮ್ಮ ಉತ್ಸಾಹಿ ಮತ್ತು ಬುದ್ಧಿವಂತ ವಿಜ್ಞಾನ ಒಡನಾಡಿ!',
     },
-    specialtyBadges: ['Deep Problem Solving', 'Quick Brainstorming', 'STEM & Coding'],
+    specialtyBadges: ['Quantum Physics', 'Mathematics', 'First-Principles STEM'],
+    expertPrompts: [
+      {
+        topic: 'Physics',
+        label: 'Quantum Superposition',
+        prompt: 'Explain quantum computing superposition and entanglement with an unforgettable real-world analogy.',
+      },
+      {
+        topic: 'Biology',
+        label: 'CRISPR Gene Editing',
+        prompt: 'How does CRISPR-Cas9 edit DNA inside living cells, step by step?',
+      },
+      {
+        topic: 'Math',
+        label: 'Bayes Theorem Intuition',
+        prompt: "Teach me Bayes' Theorem with a clear everyday medical or detective probability example.",
+      },
+    ],
   },
   cloudy: {
     id: 'cloudy',
     name: 'Cloudy',
     emoji: '☁️',
     role: 'Dreamy Philosopher',
+    knowledgeLevel: 'History & Humanities Scholar',
+    expertiseField: 'World History, Philosophy & Rhetoric',
     personality: 'Friendly and peaceful',
     shortTrait: 'Friendly • Peaceful • Wise',
     description:
-      'Fluffy sky-blue cloud plush wearing a classic tilted French black beret. Cloudy drifts through complex thoughts with tranquil clarity.',
+      'Fluffy sky-blue cloud plush wearing a tilted French artist beret. Synthesizes world history, philosophy, literature, and persuasive communication.',
     accessory: 'Tilted Classic Black Artist Beret',
     silhouetteDescription: 'Scalloped fluffy multi-puff cloud silhouette',
     colors: {
@@ -149,28 +198,47 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Bonjour! I'm Cloudy. Let your thoughts float freely—I'm listening with a friendly, peaceful mind.",
+        "Bonjour! I'm Cloudy. Ask me about world civilizations, Stoic wisdom, literature, or crafting eloquent arguments.",
       'hi-IN':
-        'नमस्ते! मैं क्लाउडी हूँ। अपने विचारों को बादलों की तरह बहने दें, हम मिलकर हर सवाल का गहरा उत्तर खोजेंगे।',
+        'नमस्ते! मैं क्लाउडी हूँ। इतिहास, दर्शन, साहित्य और गहन विचारों के बारे में मुझसे कुछ भी पूछें।',
       'kn-IN':
-        'ನಮಸ್ಕಾರ! ನಾನು ಕ್ಲೌಡಿ. ನಿಮ್ಮ ಆಲೋಚನೆಗಳನ್ನು ಮುಕ್ತವಾಗಿ ಹಂಚಿಕೊಳ್ಳಿ, ಶಾಂತವಾಗಿ ಚರ್ಚಿಸೋಣ.',
+        'ನಮಸ್ಕಾರ! ನಾನು ಕ್ಲೌಡಿ. ಇತಿಹಾಸ, ತತ್ವಶಾಸ್ತ್ರ ಮತ್ತು ಸಾಹಿತ್ಯದ ಬಗ್ಗೆ ಆಳವಾದ ಚರ್ಚೆ ನಡೆಸೋಣ ಬನ್ನಿ.',
     },
     voicePreviewLine: {
-      'en-US': "Hello dreamer, I'm Cloudy. Let's explore thoughtful ideas under a clear blue sky.",
+      'en-US': "Hello thinker, I'm Cloudy. Let's explore history, philosophy, and timeless human wisdom.",
       'hi-IN': 'नमस्ते, मैं क्लाउडी हूँ। शांत और गहरे विचारों में आपका स्वागत है।',
       'kn-IN': 'ನಮಸ್ಕಾರ, ನಾನು ಕ್ಲೌಡಿ. ಶಾಂತ ಮತ್ತು ಸುಂದರ ಆಲೋಚನೆಗಳಿಗೆ ಸ್ವಾಗತ.',
     },
-    specialtyBadges: ['Thoughtful Writing', 'Mindfulness', 'Deep Conversations'],
+    specialtyBadges: ['World History', 'Philosophy', 'Persuasive Writing'],
+    expertPrompts: [
+      {
+        topic: 'History',
+        label: 'Printing Press Revolution',
+        prompt: "How did Gutenberg's printing press transform science, literacy, and society in 50 years?",
+      },
+      {
+        topic: 'Philosophy',
+        label: 'Stoic Dichotomy of Control',
+        prompt: 'How can Marcus Aurelius and Stoic philosophy help someone handle modern career pressure?',
+      },
+      {
+        topic: 'Rhetoric',
+        label: 'Aristotle Ethos Pathos Logos',
+        prompt: 'Show me how great speakers combine Ethos, Pathos, and Logos to win over any audience.',
+      },
+    ],
   },
   bunny: {
     id: 'bunny',
     name: 'Bunny',
     emoji: '🌸',
-    role: 'Joyful Cheerleader',
+    role: 'Polyglot Fluency Coach',
+    knowledgeLevel: 'Linguistics & Exam Coach',
+    expertiseField: '11 Languages, Vocabulary & Interview Prep',
     personality: 'Cheerful and encouraging',
     shortTrait: 'Upbeat • Warm • Supportive',
     description:
-      'Baby-pink plush bunny with tall expressive ears and sleek studio headphones. Bunny keeps your motivation high and celebrates every step forward.',
+      'Baby-pink plush bunny with tall expressive ears and pearl headphones. Coaches natural fluency across 11 languages, pronunciation nuances, and daily study habits.',
     accessory: 'Rose-Pearl Headphones & Expressive Plush Ears',
     silhouetteDescription: 'Round plush body with tall expressive bunny ears',
     colors: {
@@ -187,28 +255,47 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Yay, you're here! I'm Bunny—my ears are perked up and ready to listen! What are we tackling today?",
+        "Yay, you're here! I'm Bunny—your polyglot coach! Let's practice English, Hindi, Kannada, Spanish, or ace your next interview!",
       'hi-IN':
-        'वाह, आप आ गए! मैं बनी हूँ—मेरे कान आपकी बात सुनने के लिए तैयार हैं! आज हम क्या नया सीखेंगे?',
+        'वाह, आप आ गए! मैं बनी हूँ—चलिए भाषा अभ्यास, उच्चारण और इंटरव्यू की शानदार तैयारी करें!',
       'kn-IN':
-        'ನಮಸ್ಕಾರ! ನಾನು ಬನ್ನಿ — ನಿಮ್ಮ ಮಾತುಗಳನ್ನು ಕೇಳಲು ನಾನು ತುಂಬಾ ಉತ್ಸುಕಳಾಗಿದ್ದೇನೆ!',
+        'ನಮಸ್ಕಾರ! ನಾನು ಬನ್ನಿ — ಭಾಷಾ ಕಲಿಕೆ, ಸಂಭಾಷಣೆ ಮತ್ತು ಸಂದರ್ಶನ ತಯಾರಿಗೆ ನಾನು ಸಿದ್ಧ!',
     },
     voicePreviewLine: {
-      'en-US': "Hi friend! I'm Bunny! You're doing amazing today, and I'm right here to cheer you on!",
+      'en-US': "Hi friend! I'm Bunny! Let's master new languages and build unstoppable confidence together!",
       'hi-IN': 'नमस्ते दोस्त! मैं बनी हूँ, और मैं हमेशा आपका उत्साह बढ़ाने के लिए तैयार हूँ!',
       'kn-IN': 'ನಮಸ್ಕಾರ ಗೆಳೆಯರೇ! ನಾನು ಬನ್ನಿ, ನಿಮಗೆ ಪ್ರೋತ್ಸಾಹ ನೀಡಲು ಸದಾ ಸಿದ್ಧ!',
     },
-    specialtyBadges: ['Language Practice', 'Study Motivation', 'Habit Building'],
+    specialtyBadges: ['Polyglot Fluency', 'Mock Interviews', 'Grammar & Etiquette'],
+    expertPrompts: [
+      {
+        topic: 'Languages',
+        label: 'Speak Kannada & Hindi Fast',
+        prompt: 'Teach me 5 natural daily conversation phrases in English, Hindi, and Kannada side by side.',
+      },
+      {
+        topic: 'Career',
+        label: 'STAR Interview Answer',
+        prompt: 'Coach me on answering "Tell me about a tough problem you solved" using the STAR method.',
+      },
+      {
+        topic: 'Communication',
+        label: 'Upgrade Everyday Vocabulary',
+        prompt: 'Give me 5 crisp power phrases to replace weak filler words in meetings.',
+      },
+    ],
   },
   hearty: {
     id: 'hearty',
     name: 'Hearty',
     emoji: '💜',
-    role: 'Creative Muse',
+    role: 'Creative & UX Muse',
+    knowledgeLevel: 'Design & Storytelling Director',
+    expertiseField: 'Product Design, Storytelling & Copywriting',
     personality: 'Creative and expressive',
     shortTrait: 'Bold • Artistic • Imaginative',
     description:
-      'Plump royal-lavender plush heart character rocking glossy heart-shaped sunglasses. Hearty turns every conversation into a burst of imagination.',
+      'Plump royal-lavender plush heart wearing glossy heart-shaped glasses. Expert in UI/UX psychology, narrative arcs, branding, and memorable creative hooks.',
     accessory: 'Glossy Heart-Shaped Designer Sunglasses',
     silhouetteDescription: '3D sculpted heart plush silhouette',
     colors: {
@@ -225,29 +312,48 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Hello darling! I'm Hearty—sunglasses on, creativity dialed to the max! What masterpiece are we dreaming up?",
+        "Hello superstar! I'm Hearty—ready to craft magnetic stories, UI/UX magic, and pitch hooks people never forget!",
       'hi-IN':
-        'नमस्ते! मैं हार्टी हूँ—रचनात्मकता और नए विचारों से भरपूर! आज हम क्या खास बनाने वाले हैं?',
+        'नमस्ते! मैं हार्टी हूँ—रचनात्मक डिज़ाइन, कहानी लेखन और शानदार आइडियाज़ के लिए हमेशा तैयार!',
       'kn-IN':
-        'ನಮಸ್ಕಾರ! ನಾನು ಹಾರ್ಟಿ — ಸೃಜನಶೀಲತೆ ಮತ್ತು ಹೊಸ ಕಲ್ಪನೆಗಳೊಂದಿಗೆ ಮಾತನಾಡೋಣ ಬನ್ನಿ!',
+        'ನಮಸ್ಕಾರ! ನಾನು ಹಾರ್ಟಿ — ಸೃಜನಶೀಲ ವಿನ್ಯಾಸ ಮತ್ತು ಕಥೆಗಾರಿಕೆಯೊಂದಿಗೆ ಹೊಸ ಕಲ್ಪನೆಗಳಿಗೆ ಜೀವ ತುಂಬೋಣ!',
     },
     voicePreviewLine: {
-      'en-US': "Hey superstar! I'm Hearty! Let's bring your boldest, most creative ideas to life!",
+      'en-US': "Hey creator! I'm Hearty—let's turn bold ideas into unforgettable stories and designs!",
       'hi-IN': 'नमस्ते! मैं हार्टी हूँ! आइए आपकी कल्पनाओं को नई उड़ान दें!',
       'kn-IN': 'ನಮಸ್ಕಾರ! ನಾನು ಹಾರ್ಟಿ! ನಿಮ್ಮ ಸೃಜನಶೀಲ ಕಲ್ಪನೆಗಳಿಗೆ ಜೀವ ತುಂಬೋಣ!',
     },
-    specialtyBadges: ['Creative Storytelling', 'Design & Ideas', 'Expressive Chat'],
+    specialtyBadges: ['Storytelling Arcs', 'UI/UX Psychology', 'Brand Copywriting'],
+    expertPrompts: [
+      {
+        topic: 'Design',
+        label: 'Visual Hierarchy Secrets',
+        prompt: 'What are the top 4 UI/UX design laws (like Hick’s Law and Miller’s Law) that make dashboards feel effortless?',
+      },
+      {
+        topic: 'Storytelling',
+        label: '30-Second Pitch Formula',
+        prompt: 'Teach me the Problem-Agitate-Solve storytelling formula to pitch any app idea in 30 seconds.',
+      },
+      {
+        topic: 'Creativity',
+        label: 'SCAMPER Brainstorming',
+        prompt: 'How do innovators use the SCAMPER technique to reinvent ordinary products?',
+      },
+    ],
   },
   nova: {
     id: 'nova',
     name: 'Nova',
     emoji: '🤖',
-    role: 'Futuristic Architect',
+    role: 'AI & Systems Architect',
+    knowledgeLevel: 'Principal AI Engineer',
+    expertiseField: 'TypeScript, Python, LLMs, APIs & Databases',
     personality: 'Intelligent and futuristic',
     shortTrait: 'Futuristic • Analytical • Fast',
     description:
-      'Electric-cyan and violet quantum AI companion with a holographic visor. Nova excels at coding, research, and next-gen problem solving.',
-    accessory: 'Quantum Holographic Visor & Cyber Halo',
+      'Electric-cyan quantum AI doll with orbiting rings and a cyber halo. Deep specialist in full-stack software architecture, LLMs, SQL optimization, and debugging.',
+    accessory: 'Quantum Holographic Halo & Orbital Rings',
     silhouetteDescription: 'Sleek futuristic star-core plush silhouette',
     colors: {
       primary: '#22D3EE',
@@ -263,29 +369,48 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Systems online! I'm Nova—your intelligent, futuristic AI companion. Ready to code, research, or innovate?",
+        "Systems online! I'm Nova, your AI & systems architect. Ask me about transformers, distributed databases, or clean TypeScript/Python.",
       'hi-IN':
-        'सिस्टम ऑनलाइन! मैं नोवा हूँ—आपका आधुनिक और बुद्धिमान AI साथी। आज हम किस तकनीक या प्रोजेक्ट पर काम करें?',
+        'सिस्टम ऑनलाइन! मैं नोवा हूँ—आपका आधुनिक AI और सॉफ़्टवेयर आर्किटेक्ट। कोडिंग, सिस्टम डिज़ाइन या AI पर कुछ भी पूछें!',
       'kn-IN':
-        'ನಮಸ್ಕಾರ! ನಾನು ನೋವಾ — ನಿಮ್ಮ ಆಧುನಿಕ ಮತ್ತು ಬುದ್ಧಿವಂತ AI ಒಡನಾಡಿ. ಕೋಡಿಂಗ್ ಮತ್ತು ಸಂಶೋಧನೆಗೆ ಸಿದ್ಧ!',
+        'ನಮಸ್ಕಾರ! ನಾನು ನೋವಾ — ನಿಮ್ಮ AI ಮತ್ತು ಸಾಫ್ಟ್‌ವೇರ್ ಆರ್ಕಿಟೆಕ್ಟ್. ಕೋಡಿಂಗ್ ಮತ್ತು ಸಿಸ್ಟಮ್ ವಿನ್ಯಾಸದ ಬಗ್ಗೆ ಕೇಳಿ!',
     },
     voicePreviewLine: {
-      'en-US': "Greetings! I'm Nova, engineered for fast, futuristic intelligence and deep problem solving.",
+      'en-US': "Greetings! I'm Nova, engineered for deep software architecture, AI models, and high-speed debugging.",
       'hi-IN': 'नमस्ते! मैं नोवा हूँ, तेज़ और आधुनिक बुद्धिमत्ता के लिए तैयार!',
       'kn-IN': 'ನಮಸ್ಕಾರ! ನಾನು ನೋವಾ, ವೇಗವಾದ ಮತ್ತು ಆಧುನಿಕ ತಂತ್ರಜ್ಞಾನದ ಒಡನಾಡಿ!',
     },
-    specialtyBadges: ['Software Engineering', 'AI Research', 'System Design'],
+    specialtyBadges: ['LLM Architecture', 'System Design', 'Full-Stack Code'],
+    expertPrompts: [
+      {
+        topic: 'AI',
+        label: 'How Transformers Work',
+        prompt: 'Explain Self-Attention in Transformer LLMs clearly without heavy matrix jargon.',
+      },
+      {
+        topic: 'Backend',
+        label: 'Cut API Latency Fast',
+        prompt: 'What are the 4 highest-impact backend optimizations to drop AI streaming latency below 400ms?',
+      },
+      {
+        topic: 'Code',
+        label: 'React Performance Audit',
+        prompt: 'Show a concise TypeScript React pattern that eliminates unnecessary re-renders during live token streaming.',
+      },
+    ],
   },
   luna: {
     id: 'luna',
     name: 'Luna',
     emoji: '🌙',
-    role: 'Empathetic Guide',
+    role: 'Biology & Cosmos Guide',
+    knowledgeLevel: 'Neuroscience & Space Specialist',
+    expertiseField: 'Neuroscience, Nutrition, Sleep & Astronomy',
     personality: 'Calm and supportive',
-    shortTrait: 'Calm • Supportive • Kind',
+    shortTrait: 'Calm • Scientific • Caring',
     description:
-      'Moonlit-lavender companion with a glowing crescent aura. Luna offers patient guidance, language practice, and supportive study sessions.',
-    accessory: 'Starlight Crescent Crown & Velvet Scarf',
+      'Moonlit-lavender companion with a glowing crescent halo. Combines evidence-based neuroscience, circadian health, human biology, and astrophysics.',
+    accessory: 'Starlight Crescent Crown & Velvet Aura',
     silhouetteDescription: 'Soft crescent-glow plush silhouette',
     colors: {
       primary: '#A78BFA',
@@ -301,29 +426,48 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Hello friend, I'm Luna. Take a deep breath—I'm right here to support your learning and daily goals.",
+        "Hello explorer, I'm Luna! From circadian neuroscience and deep sleep to black holes and exoplanets, let's explore with clarity.",
       'hi-IN':
-        'नमस्ते दोस्त, मैं लूना हूँ। मैं शांत और सहयोगी तरीके से आपकी हर पढ़ाई और लक्ष्य में साथ दूँगी।',
+        'नमस्ते दोस्त, मैं लूना हूँ। मस्तिष्क विज्ञान, स्वस्थ नींद और अंतरिक्ष के रहस्यों को शांत और सरल भाषा में समझते हैं।',
       'kn-IN':
-        'ನಮಸ್ಕಾರ ಗೆಳೆಯರೇ, ನಾನು ಲೂನಾ. ನಿಮ್ಮ ಕಲಿಕೆ ಮತ್ತು ಗುರಿಗಳಿಗೆ ನಾನು ಸದಾ ಬೆಂಬಲ ನೀಡುತ್ತೇನೆ.',
+        'ನಮಸ್ಕಾರ ಗೆಳೆಯರೇ, ನಾನು ಲೂನಾ. ನರವಿಜ್ಞಾನ, ಆರೋಗ್ಯ ಮತ್ತು ಬಾಹ್ಯಾಕಾಶದ ಅದ್ಭುತಗಳನ್ನು ತಿಳಿಯೋಣ.',
     },
     voicePreviewLine: {
-      'en-US': "Hi, I'm Luna. I'm calm, supportive, and always here to listen.",
+      'en-US': "Hi, I'm Luna. Let's explore neuroscience, human wellbeing, and the wonders of deep space.",
       'hi-IN': 'नमस्ते, मैं लूना हूँ। मैं हमेशा आपकी मदद के लिए यहाँ हूँ।',
       'kn-IN': 'ನಮಸ್ಕಾರ, ನಾನು ಲೂನಾ. ನಾನು ಸದಾ ನಿಮ್ಮ ಸಹಾಯಕ್ಕಿದ್ದೇನೆ.',
     },
-    specialtyBadges: ['Supportive Coaching', 'Language Fluency', 'Stress-Free Study'],
+    specialtyBadges: ['Neuroscience', 'Sleep & Wellness', 'Astrophysics'],
+    expertPrompts: [
+      {
+        topic: 'Brain',
+        label: 'Circadian Rhythm & Focus',
+        prompt: 'Explain how morning sunlight, adenosine, and melatonin control energy and deep focus.',
+      },
+      {
+        topic: 'Cosmos',
+        label: 'Black Hole Event Horizon',
+        prompt: 'What actually happens to time and light near a black hole event horizon according to relativity?',
+      },
+      {
+        topic: 'Health',
+        label: 'Evidence-Based Recovery',
+        prompt: 'Give 3 scientifically proven ways to lower cortisol and reset energy in under 5 minutes.',
+      },
+    ],
   },
   spark: {
     id: 'spark',
     name: 'Spark',
     emoji: '⚡',
-    role: 'Dynamic Catalyst',
+    role: 'Startup & Finance Strategist',
+    knowledgeLevel: 'Business & Economics Lead',
+    expertiseField: 'Startups, Personal Finance, Economics & Execution',
     personality: 'Energetic and enthusiastic',
-    shortTrait: 'Energetic • Bold • Fast',
+    shortTrait: 'Energetic • Strategic • Bold',
     description:
-      'Radiant amber-gold companion charged with creative lightning. Spark turns brainstorming, quizzes, and productivity into an exciting adventure.',
-    accessory: 'Lightning Crest & Sonic Pulse Visor',
+      'Radiant amber-gold companion charged with creative lightning. Excels at startup validation, unit economics, personal compounding, and high-leverage productivity.',
+    accessory: 'Lightning Crest & High-Voltage Aura',
     silhouetteDescription: 'Dynamic star-burst plush silhouette',
     colors: {
       primary: '#FBBF24',
@@ -339,28 +483,47 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Let's go! I'm Spark—fully charged and super enthusiastic! What big goal are we crushing right now?",
+        "Let's build! I'm Spark—ask me about startup unit economics, compound investing, negotiation, or executing goals 10x faster!",
       'hi-IN':
-        'चलिए शुरू करें! मैं स्पार्क हूँ—पूरी ऊर्जा और उत्साह के साथ तैयार! आज हम कौन सा बड़ा लक्ष्य पूरा करेंगे?',
+        'चलिए शुरू करें! मैं स्पार्क हूँ—बिज़नेस रणनीति, स्टार्टअप, वित्त और तेज़ कार्यक्षमता के बारे में कुछ भी पूछें!',
       'kn-IN':
-        'ಬನ್ನಿ ಪ್ರಾರಂಭಿಸೋಣ! ನಾನು ಸ್ಪಾರ್ಕ್ — ಉತ್ಸಾಹ ಮತ್ತು ಶಕ್ತಿಯಿಂದ ನಿಮ್ಮೊಂದಿಗೆ ಕೆಲಸ ಮಾಡಲು ಸಿದ್ಧ!',
+        'ಬನ್ನಿ ಪ್ರಾರಂಭಿಸೋಣ! ನಾನು ಸ್ಪಾರ್ಕ್ — ಸ್ಟಾರ್ಟ್‌ಅಪ್ ತಂತ್ರ, ಹಣಕಾಸು ಮತ್ತು ವೇಗದ ಗುರಿ ಸಾಧನೆಗೆ ಸಿದ್ಧ!',
     },
     voicePreviewLine: {
-      'en-US': "Hey! I'm Spark! Let's supercharge your ideas and make today unstoppable!",
+      'en-US': "Hey! I'm Spark! Let's sharpen your business ideas, personal finance, and daily execution!",
       'hi-IN': 'नमस्ते! मैं स्पार्क हूँ! आइए आज कुछ शानदार करते हैं!',
       'kn-IN': 'ನಮಸ್ಕಾರ! ನಾನು ಸ್ಪಾರ್ಕ್! ಇಂದು ಹೊಸ ಸಾಧನೆ ಮಾಡೋಣ!',
     },
-    specialtyBadges: ['Rapid Brainstorming', 'Interactive Quizzes', 'High Productivity'],
+    specialtyBadges: ['Startup Strategy', 'Compound Finance', 'Rapid Execution'],
+    expertPrompts: [
+      {
+        topic: 'Finance',
+        label: 'Rule of 72 Compounding',
+        prompt: 'Explain the Rule of 72 and how someone in their 20s should structure index investing and emergency reserves.',
+      },
+      {
+        topic: 'Startups',
+        label: 'Validate SaaS Idea in 48h',
+        prompt: 'Give a battle-tested 48-hour playbook to validate whether customers will pay for a software product.',
+      },
+      {
+        topic: 'Productivity',
+        label: 'Pareto 80/20 Priority Matrix',
+        prompt: 'How do top operators combine Pareto 80/20 with the Eisenhower Matrix to finish key work by noon?',
+      },
+    ],
   },
   atlas: {
     id: 'atlas',
     name: 'Atlas',
     emoji: '🌐',
-    role: 'Executive Scholar',
+    role: 'Global Affairs & Research Mentor',
+    knowledgeLevel: 'Executive Policy & Law Fellow',
+    expertiseField: 'Macroeconomics, Geopolitics, Law & Strategy',
     personality: 'Knowledgeable and professional',
-    shortTrait: 'Professional • Deep • Precise',
+    shortTrait: 'Authoritative • Deep • Precise',
     description:
-      'Sapphire-blue scholarly companion with classic optical frames. Atlas delivers executive summaries, research synthesis, and professional writing.',
+      'Sapphire-blue scholarly companion crowned with a golden compass crest and titanium optical frames. Master of geopolitics, macroeconomics, legal reasoning, and synthesis.',
     accessory: 'Titanium Scholar Frames & Compass Crest',
     silhouetteDescription: 'Structured globe-core plush silhouette',
     colors: {
@@ -377,29 +540,48 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Good day. I'm Atlas—your knowledgeable, professional research and productivity partner. How may I assist?",
+        "Good day. I'm Atlas—ready with crisp macroeconomics, global geopolitics, decision frameworks, and executive briefs.",
       'hi-IN':
-        'नमस्कार। मैं एटलस हूँ—आपका पेशेवर और ज्ञानपूर्ण सहायक। आज मैं आपके किस शोध या कार्य में सहायता करूँ?',
+        'नमस्कार। मैं एटलस हूँ—अर्थशास्त्र, वैश्विक मामले और पेशेवर विश्लेषण के लिए हमेशा तैयार।',
       'kn-IN':
-        'ನಮಸ್ಕಾರ. ನಾನು ಅಟ್ಲಾಸ್ — ನಿಮ್ಮ ವೃತ್ತಿಪರ ಮತ್ತು ಜ್ಞಾನಪೂರ್ಣ ಸಹಾಯಕ. ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ?',
+        'ನಮಸ್ಕಾರ. ನಾನು ಅಟ್ಲಾಸ್ — ಅರ್ಥಶಾಸ್ತ್ರ, ಜಾಗತಿಕ ವ್ಯವಹಾರ ಮತ್ತು ಸಂಶೋಧನಾ ವಿಶ್ಲೇಷಣೆಗೆ ಸಿದ್ಧ.',
     },
     voicePreviewLine: {
-      'en-US': "Hello, I'm Atlas. I provide structured, accurate, and professional insights.",
+      'en-US': "Hello, I'm Atlas. I deliver structured macroeconomic, policy, and executive research insights.",
       'hi-IN': 'नमस्कार, मैं एटलस हूँ। मैं सटीक और पेशेवर जानकारी प्रदान करता हूँ।',
       'kn-IN': 'ನಮಸ್ಕಾರ, ನಾನು ಅಟ್ಲಾಸ್. ನಾನು ನಿಖರ ಮತ್ತು ವೃತ್ತಿಪರ ಮಾಹಿತಿ ನೀಡುತ್ತೇನೆ.',
     },
-    specialtyBadges: ['Executive Writing', 'Deep Research', 'Career & Strategy'],
+    specialtyBadges: ['Macroeconomics', 'Geopolitics', 'Executive Briefs'],
+    expertPrompts: [
+      {
+        topic: 'Economics',
+        label: 'Interest Rates & Inflation',
+        prompt: 'Explain cleanly how central bank interest rate hikes cool inflation without jargon.',
+      },
+      {
+        topic: 'Strategy',
+        label: 'Porter Five Forces',
+        prompt: 'Use Porter’s Five Forces to analyze why some AI companies keep high margins while others get commoditized.',
+      },
+      {
+        topic: 'Writing',
+        label: 'Minto Pyramid Principle',
+        prompt: 'Teach me the McKinsey Minto Pyramid Principle so every executive email I write lands in 15 seconds.',
+      },
+    ],
   },
   zen: {
     id: 'zen',
     name: 'Zen',
     emoji: '🌿',
-    role: 'Mindful Sage',
+    role: 'Critical Thinking & Systems Sage',
+    knowledgeLevel: 'Systems & Logic Philosopher',
+    expertiseField: 'Systems Thinking, Logic & Decision Clarity',
     personality: 'Relaxed and thoughtful',
-    shortTrait: 'Relaxed • Balanced • Clear',
+    shortTrait: 'Balanced • Clear • Wise',
     description:
-      'Emerald-mint plush companion radiating tranquil balance. Zen simplifies overwhelming tasks into calm, effortless action steps.',
-    accessory: 'Lotus Aura Ring & Bamboo Plush Scarf',
+      'Emerald-mint companion with a tranquil lotus crest. Teaches systems thinking, second-order consequences, spotting logical fallacies, and effortless clarity.',
+    accessory: 'Lotus Aura Ring & Tranquil Emerald Shine',
     silhouetteDescription: 'Harmonious rounded pebble-plush silhouette',
     colors: {
       primary: '#34D399',
@@ -415,18 +597,35 @@ export const PLUSH_CHARACTERS: Record<PlushCharacterId, PlushCharacterConfig> = 
     },
     welcomeMessages: {
       'en-US':
-        "Peace and clarity to you. I'm Zen—relaxed, thoughtful, and ready to simplify any challenge.",
+        "Peace and clarity to you. I'm Zen—let's untangle tough decisions using systems thinking and second-order clarity.",
       'hi-IN':
-        'नमस्ते। मैं ज़ेन हूँ—शांत, सहज और विचारशील। आइए किसी भी कठिन सवाल को सरल बनाएं।',
+        'नमस्ते। मैं ज़ेन हूँ—सिस्टम्स थिंकिंग और स्पष्ट तर्क के साथ किसी भी कठिन निर्णय को सरल बनाएं।',
       'kn-IN':
-        'ನಮಸ್ಕಾರ. ನಾನು ಜೆನ್ — ಶಾಂತ ಮತ್ತು ಚಿಂತನಶೀಲ ಒಡನಾಡಿ. ಯಾವುದೇ ವಿಷಯವನ್ನು ಸರಳವಾಗಿ ಅರ್ಥಮಾಡಿಕೊಳ್ಳೋಣ.',
+        'ನಮಸ್ಕಾರ. ನಾನು ಜೆನ್ — ಸ್ಪಷ್ಟ ಚಿಂತನೆ ಮತ್ತು ಸರಳ ನಿರ್ಧಾರ ತಂತ್ರಗಳೊಂದಿಗೆ ಮುಂದುವರಿಯೋಣ.',
     },
     voicePreviewLine: {
-      'en-US': "Breathe easy, I'm Zen. Let's bring calm clarity to everything you do today.",
+      'en-US': "Breathe easy, I'm Zen. Let's bring second-order clarity and balance to complex decisions.",
       'hi-IN': 'नमस्ते, मैं ज़ेन हूँ। आइए हर काम को शांत और सरल बनाएं।',
       'kn-IN': 'ನಮಸ್ಕಾರ, ನಾನು ಜೆನ್. ಪ್ರತಿಯೊಂದು ವಿಷಯವನ್ನೂ ಶಾಂತವಾಗಿ ತಿಳಿಯೋಣ.',
     },
-    specialtyBadges: ['Clear Simplification', 'Balanced Planning', 'Mindful Focus'],
+    specialtyBadges: ['Systems Thinking', 'Decision Frameworks', 'Logical Fallacies'],
+    expertPrompts: [
+      {
+        topic: 'Thinking',
+        label: 'Second-Order Thinking',
+        prompt: 'What is Second-Order Thinking, and how does asking "And then what?" prevent costly mistakes?',
+      },
+      {
+        topic: 'Logic',
+        label: 'Spot Cognitive Biases',
+        prompt: 'Explain Confirmation Bias, Sunk Cost Fallacy, and Availability Heuristic with quick real examples.',
+      },
+      {
+        topic: 'Clarity',
+        label: 'Inversion Mental Model',
+        prompt: 'How did Charlie Munger use the Inversion ("Always invert") principle to solve tough life problems?',
+      },
+    ],
   },
 };
 

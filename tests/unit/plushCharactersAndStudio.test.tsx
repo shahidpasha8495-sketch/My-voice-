@@ -7,13 +7,16 @@ import { CharacterGallery } from '../../src/components/character/CharacterGaller
 import { CharacterSelector } from '../../src/components/character/CharacterSelector';
 import { CompanionPanel } from '../../src/components/character/CompanionPanel';
 import { PlushCharacter } from '../../src/components/character/PlushCharacter';
+import { ChatWindow } from '../../src/components/chat/ChatWindow';
 import { VoiceOrb } from '../../src/components/voice/VoiceOrb';
 import { VoiceStudio } from '../../src/components/voice/VoiceStudio';
 import {
+  ALL_COMPANION_LIST,
   PLUSH_CHARACTER_LIST,
   getDailyGreeting,
   isValidCharacterId,
 } from '../../src/config/characters';
+import { VoiceStateProvider } from '../../src/hooks/useVoiceState';
 import { CharacterProvider, useCharacter } from '../../src/hooks/useCharacter';
 import { ThemeProvider, useTheme } from '../../src/hooks/useTheme';
 
@@ -243,5 +246,63 @@ describe('Unit: PLUSH AI Characters, Gallery, Voice Studio & Themes', () => {
 
     expect(screen.getByTestId('contextual-companion-panel')).toBeInTheDocument();
     expect(screen.getByText('Mindful Companion')).toBeInTheDocument();
+    expect(screen.getByText(/Psychology, Active Recall/i)).toBeInTheDocument();
+  });
+
+  it('equips all 10 animated dolls with specialized knowledge domains and renders the clear 3-tab dashboard hub', () => {
+    expect(ALL_COMPANION_LIST).toHaveLength(10);
+    ALL_COMPANION_LIST.forEach((doll) => {
+      expect(doll.knowledgeLevel.length).toBeGreaterThan(3);
+      expect(doll.expertiseField.length).toBeGreaterThan(5);
+      expect(doll.expertPrompts.length).toBeGreaterThanOrEqual(3);
+    });
+
+    const onSelectPrompt = vi.fn();
+    render(
+      <VoiceStateProvider>
+        <CharacterProvider>
+          <ChatWindow
+            messages={[]}
+            language="en-US"
+            voiceState="idle"
+            voiceStatusLabel="Ready"
+            liveTranscriptPreview=""
+            isLoadingHistory={false}
+            isSending={false}
+            chatError={null}
+            voiceError={null}
+            isRecognitionSupported={true}
+            isSynthesisSupported={true}
+            isListening={false}
+            isSpeaking={false}
+            isPaused={false}
+            activeSpeakingMessageId={null}
+            hasReplayableResponse={false}
+            selectedCharacterId="geni"
+            onSelectCharacter={vi.fn()}
+            onSelectSuggestedPrompt={onSelectPrompt}
+            onStartListening={vi.fn()}
+            onStopListening={vi.fn()}
+            onCancelListening={vi.fn()}
+            onSpeakMessage={vi.fn()}
+            onStopSpeaking={vi.fn()}
+            onPauseSpeaking={vi.fn()}
+            onResumeSpeaking={vi.fn()}
+            onReplayResponse={vi.fn()}
+            onDismissChatError={vi.fn()}
+            onDismissVoiceError={vi.fn()}
+          />
+        </CharacterProvider>
+      </VoiceStateProvider>
+    );
+
+    expect(screen.getByText('Talk with Geni')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-tab-dolls')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-tab-speed')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-tab-weather')).toBeInTheDocument();
+    expect(screen.getByText('Quantum Superposition')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('dashboard-tab-speed'));
+    expect(screen.getByTestId('voice-analytics-widget')).toBeInTheDocument();
   });
 });

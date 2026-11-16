@@ -1,14 +1,21 @@
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
+  Brain,
   CalendarClock,
+  CloudSun,
+  Gauge,
+  GraduationCap,
   Loader2,
+  PhoneCall,
   Radio,
   RefreshCw,
+  SlidersHorizontal,
   Sparkles,
   X,
+  Zap,
 } from 'lucide-react';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   PLUSH_CHARACTERS,
   getCharacterWelcome,
@@ -22,6 +29,7 @@ import type {
   SupportedLanguage,
   VoiceState,
 } from '../../types';
+import { cn } from '../../utils/formatters';
 import { FOLLOW_UP_QUICK_ACTIONS, getLanguageMetadata } from '../../utils/language';
 import { CharacterSelector } from '../character/CharacterSelector';
 import { VoiceControls } from '../voice/VoiceControls';
@@ -143,6 +151,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onDismissChatError,
   onDismissVoiceError,
 }) => {
+  const [homeHubTab, setHomeHubTab] = useState<'dolls' | 'speed' | 'weather'>('dolls');
+  const [showActiveChatControls, setShowActiveChatControls] = useState(false);
+
   const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
   const langMeta = getLanguageMetadata(language);
   const character =
@@ -235,37 +246,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         ) : messages.length === 0 ? (
           /* =============================================================
-             MYVOICE PLUSH COMPANION WELCOME EXPERIENCE (Empty State)
+             CLEAN, CLARITY-FIRST PLUSH COMPANION DASHBOARD (Empty State)
              ============================================================= */
           <div
             className="flex flex-col items-center justify-center py-2 sm:py-4 text-center"
             data-testid="empty-conversation-state"
           >
-            {/* Personalized Greeting, Date & Tagline Pill */}
-            <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-purple-300/60 dark:border-[#8B5CF6]/35 bg-white/80 dark:bg-[#191B30]/90 px-4 py-1 text-xs font-semibold text-[#8B5CF6] dark:text-[#22D3EE] shadow-sm mb-3 backdrop-blur-md">
+            {/* Personalized Greeting & Date Pill */}
+            <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-purple-300/60 dark:border-[#8B5CF6]/35 bg-white/85 dark:bg-[#191B30]/90 px-4 py-1 text-xs font-semibold text-[#8B5CF6] dark:text-[#22D3EE] shadow-sm mb-3 backdrop-blur-md">
               <Sparkles className="h-3.5 w-3.5 text-[#F472B6]" />
-              <span>
-                👋 {dailyGreeting} · Your AI, Your Little Companion.
-              </span>
+              <span>👋 {dailyGreeting}</span>
               <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-[#A1A1B8]">
                 <CalendarClock className="h-3 w-3" />
                 {formattedToday}
               </span>
             </div>
 
-            {/* Welcome Greeting & Supporting Text */}
+            {/* Crisp Doll Identity Hero Headline */}
             <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-[#7C3AED] to-[#EC4899] dark:from-[#F8FAFC] dark:via-[#C4B5FD] dark:to-[#22D3EE] bg-clip-text text-transparent">
-              Hey there! Ready to talk?
+              Talk with {character.name}
             </h2>
-            <p className="mt-2 max-w-xl text-sm sm:text-base font-medium text-slate-600 dark:text-[#A1A1B8]">
-              Your little AI companion is always ready to listen.{' '}
-              <span className="text-slate-500 dark:text-[#72758E]">
-                A little personality. A lot of intelligence.
+            <p className="mt-2 max-w-2xl text-sm sm:text-base font-medium text-slate-600 dark:text-[#A1A1B8] flex flex-wrap items-center justify-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#8B5CF6]/12 border border-[#8B5CF6]/25 px-3 py-0.5 text-xs font-bold text-[#7C3AED] dark:text-[#22D3EE]">
+                <GraduationCap className="h-3.5 w-3.5" />
+                {character.knowledgeLevel} · {character.expertiseField}
               </span>
             </p>
 
-            {/* Center 3D Plush Character inside Glowing VoiceOrb */}
-            <div className="my-5">
+            {/* Centerpiece Interactive 3D Animated Doll */}
+            <div className="my-4">
               <VoiceOrb
                 state={voiceState}
                 characterId={selectedCharacterId}
@@ -276,26 +285,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               />
             </div>
 
-            {/* Character Personality Card */}
-            <div className="mb-5 max-w-xl w-full rounded-2xl border border-purple-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#191B30]/90 px-5 py-3.5 shadow-card-subtle backdrop-blur-xl">
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-bold">
-                <span className="text-slate-900 dark:text-[#F8FAFC] text-sm">
-                  {character.name}
-                </span>
-                <span className="rounded-full bg-[#8B5CF6]/15 px-2.5 py-0.5 text-[#8B5CF6] dark:text-[#22D3EE]">
-                  {character.personality}
-                </span>
-                <span className="text-slate-500 dark:text-[#A1A1B8]">
-                  · {character.accessory}
-                </span>
-              </div>
-              <p className="mt-1.5 text-xs sm:text-sm italic text-slate-700 dark:text-[#F8FAFC]/90">
+            {/* Clean Doll Bio & Greeting Bubble */}
+            <div className="mb-4 max-w-2xl w-full rounded-2xl border border-purple-200/70 dark:border-white/[0.08] bg-white/85 dark:bg-[#191B30]/90 px-5 py-3 shadow-card-subtle backdrop-blur-xl">
+              <p className="text-xs sm:text-sm italic text-slate-700 dark:text-[#F8FAFC]/90">
                 &ldquo;{getCharacterWelcome(character, language)}&rdquo;
               </p>
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+                {character.specialtyBadges.map((badge) => (
+                  <span
+                    key={badge}
+                    className="rounded-full bg-purple-100/80 dark:bg-white/[0.06] px-2.5 py-0.5 text-[10px] font-bold text-[#7C3AED] dark:text-[#C4B5FD]"
+                  >
+                    ✦ {badge}
+                  </span>
+                ))}
+              </div>
             </div>
 
-            {/* Voice Controls & Open Voice Studio Action */}
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-7">
+            {/* Focused Primary Action Controls */}
+            <div className="flex flex-wrap items-center justify-center gap-2.5 mb-6">
               <VoiceControls
                 voiceState={voiceState}
                 isRecognitionSupported={isRecognitionSupported}
@@ -321,163 +329,300 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 onResumeSpeaking={onResumeSpeaking}
               />
 
+              {onOpenImmersiveCall && (
+                <button
+                  type="button"
+                  onClick={onOpenImmersiveCall}
+                  data-testid="hero-live-call-button"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#EC4899] via-[#8B5CF6] to-[#22D3EE] px-3.5 py-2 text-xs font-bold text-white shadow-glow-primary hover:opacity-95 transition-all"
+                >
+                  <PhoneCall className="h-3.5 w-3.5" />
+                  <span>Live Call</span>
+                </button>
+              )}
+
               {onOpenVoiceStudio && (
                 <button
                   type="button"
                   onClick={onOpenVoiceStudio}
-                  className="inline-flex items-center gap-2 rounded-xl border border-purple-300/70 dark:border-white/[0.08] bg-white/85 dark:bg-[#191B30] px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-[#F8FAFC] hover:border-[#8B5CF6] transition-all"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-purple-300/70 dark:border-white/[0.08] bg-white/85 dark:bg-[#191B30] px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-[#F8FAFC] hover:border-[#8B5CF6] transition-all"
                 >
                   <Radio className="h-3.5 w-3.5 text-[#F472B6]" />
-                  <span>Open Voice Studio</span>
+                  <span>Studio</span>
                 </button>
               )}
             </div>
 
-            {/* Turbo Speed Modes, Hands-Free Auto Loop, Soundscape & Live Call Dock */}
-            {onChangeStyleMode &&
-              onToggleHandsFreeLoop &&
-              onChangeSoundscape &&
-              onOpenImmersiveCall && (
-                <div className="w-full max-w-4xl mb-6">
-                  <QuickModesDock
-                    styleMode={styleMode}
-                    handsFreeLoop={handsFreeLoop}
-                    soundscape={soundscape}
+            {/* Clean 3-Tab Dashboard Hub Navigation (Zero Vertical Clutter) */}
+            <div className="w-full max-w-4xl">
+              <div
+                role="tablist"
+                aria-label="Dashboard sections"
+                className="mx-auto mb-5 inline-flex flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-purple-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#131528]/90 p-1.5 backdrop-blur-xl shadow-sm"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={homeHubTab === 'dolls'}
+                  data-testid="dashboard-tab-dolls"
+                  onClick={() => setHomeHubTab('dolls')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all',
+                    homeHubTab === 'dolls'
+                      ? 'bg-gradient-to-r from-[#8B5CF6] to-[#22D3EE] text-white shadow-sm'
+                      : 'text-slate-600 dark:text-[#A1A1B8] hover:text-slate-900 dark:hover:text-white'
+                  )}
+                >
+                  <Brain className="h-3.5 w-3.5" />
+                  <span>Dolls &amp; Expert Topics</span>
+                </button>
+
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={homeHubTab === 'speed'}
+                  data-testid="dashboard-tab-speed"
+                  onClick={() => setHomeHubTab('speed')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all',
+                    homeHubTab === 'speed'
+                      ? 'bg-gradient-to-r from-[#8B5CF6] to-[#22D3EE] text-white shadow-sm'
+                      : 'text-slate-600 dark:text-[#A1A1B8] hover:text-slate-900 dark:hover:text-white'
+                  )}
+                >
+                  <Gauge className="h-3.5 w-3.5" />
+                  <span>Speed Modes &amp; Telemetry</span>
+                </button>
+
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={homeHubTab === 'weather'}
+                  data-testid="dashboard-tab-weather"
+                  onClick={() => setHomeHubTab('weather')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all',
+                    homeHubTab === 'weather'
+                      ? 'bg-gradient-to-r from-[#8B5CF6] to-[#22D3EE] text-white shadow-sm'
+                      : 'text-slate-600 dark:text-[#A1A1B8] hover:text-slate-900 dark:hover:text-white'
+                  )}
+                >
+                  <CloudSun className="h-3.5 w-3.5" />
+                  <span>Live Weather &amp; UV</span>
+                </button>
+              </div>
+
+              {/* HUB TAB 1: Dolls & Doll-Specific Expert Knowledge Prompts */}
+              {homeHubTab === 'dolls' && (
+                <div className="space-y-6">
+                  {onSelectCharacter && (
+                    <CharacterSelector
+                      selectedId={selectedCharacterId}
+                      onSelect={onSelectCharacter}
+                      onOpenGallery={onOpenCharacterGallery}
+                    />
+                  )}
+
+                  {/* Curated Expert Knowledge Topics for the Selected Animated Doll */}
+                  <div>
+                    <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-[#72758E]">
+                      Ask {character.name} About {character.expertiseField}
+                    </p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {character.expertPrompts.map((item, idx) => (
+                        <motion.button
+                          key={`${character.id}-${idx}`}
+                          type="button"
+                          disabled={isSending}
+                          whileHover={{ y: -3, scale: 1.01 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => onSelectSuggestedPrompt(item.prompt)}
+                          className="group flex flex-col items-start justify-between rounded-2xl border border-purple-200/70 dark:border-white/[0.08] bg-white/85 dark:bg-[#191B30]/90 p-4 text-left transition-all hover:border-[#22D3EE]/60 hover:shadow-glow-primary backdrop-blur-md"
+                        >
+                          <span className="rounded-md bg-[#22D3EE]/15 px-2 py-0.5 text-[10px] font-bold text-[#0284C7] dark:text-[#22D3EE]">
+                            {character.name} · {item.topic}
+                          </span>
+                          <span className="mt-2.5 text-sm font-bold text-slate-900 dark:text-[#F8FAFC] group-hover:text-[#8B5CF6] dark:group-hover:text-[#22D3EE] transition-colors">
+                            {item.label}
+                          </span>
+                          <span className="mt-1 text-xs text-slate-600 dark:text-[#A1A1B8] line-clamp-2">
+                            {item.prompt}
+                          </span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Everyday Language Quick Actions */}
+                  <div>
+                    <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-[#72758E]">
+                      Quick Actions ({langMeta.nativeName})
+                    </p>
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                      {langMeta.suggestedPrompts.map((item, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          disabled={isSending}
+                          onClick={() => onSelectSuggestedPrompt(item.prompt)}
+                          className="group flex flex-col items-start rounded-2xl border border-purple-200/60 dark:border-white/[0.07] bg-white/75 dark:bg-[#191B30]/75 p-3.5 text-left transition-all hover:border-[#8B5CF6]/60"
+                        >
+                          <span className="text-[10px] font-bold uppercase text-[#8B5CF6] dark:text-[#22D3EE]">
+                            {item.category}
+                          </span>
+                          <span className="mt-1 text-xs sm:text-sm font-bold text-slate-900 dark:text-[#F8FAFC] group-hover:text-[#8B5CF6] dark:group-hover:text-[#22D3EE]">
+                            {item.label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* HUB TAB 2: Speed Modes, Soundscape & Real-Time Pipeline Telemetry */}
+              {homeHubTab === 'speed' && (
+                <div className="space-y-4">
+                  {onChangeStyleMode &&
+                    onToggleHandsFreeLoop &&
+                    onChangeSoundscape &&
+                    onOpenImmersiveCall && (
+                      <QuickModesDock
+                        styleMode={styleMode}
+                        handsFreeLoop={handsFreeLoop}
+                        soundscape={soundscape}
+                        firstTokenMs={firstTokenMs}
+                        onChangeStyleMode={onChangeStyleMode}
+                        onToggleHandsFreeLoop={onToggleHandsFreeLoop}
+                        onChangeSoundscape={onChangeSoundscape}
+                        onOpenImmersiveCall={onOpenImmersiveCall}
+                      />
+                    )}
+                  <VoiceAnalyticsWidget
+                    messages={messages}
+                    language={language}
+                    sttLatencyMs={sttLatencyMs}
                     firstTokenMs={firstTokenMs}
-                    onChangeStyleMode={onChangeStyleMode}
-                    onToggleHandsFreeLoop={onToggleHandsFreeLoop}
-                    onChangeSoundscape={onChangeSoundscape}
-                    onOpenImmersiveCall={onOpenImmersiveCall}
+                    llmLatencyMs={llmLatencyMs}
+                    ttsLatencyMs={ttsLatencyMs}
+                    isCachedResponse={isCachedResponse}
                   />
                 </div>
               )}
 
-            {/* Real-Time Voice Pipeline Telemetry & Usage Analytics */}
-            <div className="w-full max-w-4xl mb-7">
-              <VoiceAnalyticsWidget
-                messages={messages}
-                language={language}
-                sttLatencyMs={sttLatencyMs}
-                firstTokenMs={firstTokenMs}
-                llmLatencyMs={llmLatencyMs}
-                ttsLatencyMs={ttsLatencyMs}
-                isCachedResponse={isCachedResponse}
-              />
-            </div>
-
-            {/* Live Weather & UV Index Environmental Widget */}
-            <div className="w-full max-w-4xl mb-7">
-              <WeatherUvWidget />
-            </div>
-
-            {/* 5-Character Interactive Selection Carousel */}
-            {onSelectCharacter && (
-              <div className="w-full max-w-4xl mb-7">
-                <CharacterSelector
-                  selectedId={selectedCharacterId}
-                  onSelect={onSelectCharacter}
-                  onOpenGallery={onOpenCharacterGallery}
-                />
-              </div>
-            )}
-
-            {/* Everyday Superpowers / Quick Actions */}
-            <div className="w-full max-w-4xl">
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-[#72758E]">
-                Everyday Quick Actions ({langMeta.nativeName})
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {langMeta.suggestedPrompts.map((item, idx) => (
-                  <motion.button
-                    key={idx}
-                    type="button"
-                    disabled={isSending}
-                    whileHover={{ y: -3, scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => onSelectSuggestedPrompt(item.prompt)}
-                    className="group flex flex-col items-start justify-between rounded-2xl border border-purple-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#191B30]/90 p-4 text-left transition-all hover:border-[#8B5CF6]/60 hover:shadow-glow-primary backdrop-blur-md"
-                  >
-                    <span className="rounded-md bg-[#8B5CF6]/15 px-2 py-0.5 text-[10px] font-bold text-[#8B5CF6] dark:text-[#22D3EE]">
-                      {item.category}
-                    </span>
-                    <span className="mt-2.5 text-sm font-bold text-slate-900 dark:text-[#F8FAFC] group-hover:text-[#8B5CF6] dark:group-hover:text-[#22D3EE] transition-colors">
-                      {item.label}
-                    </span>
-                    <span className="mt-1 text-xs text-slate-600 dark:text-[#A1A1B8] line-clamp-2">
-                      {item.prompt}
-                    </span>
-                  </motion.button>
-                ))}
-              </div>
+              {/* HUB TAB 3: Live Weather & UV Index */}
+              {homeHubTab === 'weather' && <WeatherUvWidget />}
             </div>
           </div>
         ) : (
           /* =============================================================
-             ACTIVE CONVERSATION MESSAGES + COMPACT PLUSH COMPANION STAGE
+             SPACIOUS, CLEAN ACTIVE CONVERSATION STAGE
              ============================================================= */
           <>
-            <div className="sticky top-2 z-10 mx-auto flex flex-col items-center justify-center rounded-2xl border border-purple-200/70 dark:border-white/[0.08] bg-white/85 dark:bg-[#101124]/90 px-4 py-3 backdrop-blur-xl shadow-card-subtle">
-              <div className="flex flex-wrap items-center justify-center gap-4">
-                <VoiceOrb
-                  state={voiceState}
-                  characterId={selectedCharacterId}
-                  statusText={voiceStatusLabel}
-                  transcriptPreview={liveTranscriptPreview}
-                  size="sm"
-                  onClick={handleOrbToggle}
-                />
-                <VoiceControls
-                  voiceState={voiceState}
-                  isRecognitionSupported={isRecognitionSupported}
-                  isSynthesisSupported={isSynthesisSupported}
-                  isListening={isListening}
-                  isPushToTalk={isPushToTalk}
-                  isSpeaking={isSpeaking}
-                  isPaused={isPaused}
-                  hasReplayableResponse={hasReplayableResponse}
-                  disabled={isSending}
-                  isMuted={isMuted}
-                  volume={volume}
-                  onToggleMute={onToggleMute}
-                  onVolumeChange={onVolumeChange}
-                  onStartListening={onStartListening}
-                  onStopListening={onStopListening}
-                  onStartPushToTalk={onStartPushToTalk}
-                  onStopPushToTalk={onStopPushToTalk}
-                  onCancelListening={onCancelListening}
-                  onReplayResponse={onReplayResponse}
-                  onStopSpeaking={onStopSpeaking}
-                  onPauseSpeaking={onPauseSpeaking}
-                  onResumeSpeaking={onResumeSpeaking}
-                />
+            <div className="sticky top-2 z-10 mx-auto w-full max-w-4xl rounded-2xl border border-purple-200/70 dark:border-white/[0.08] bg-white/90 dark:bg-[#101124]/92 px-3.5 py-2.5 backdrop-blur-xl shadow-card-subtle">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <VoiceOrb
+                    state={voiceState}
+                    characterId={selectedCharacterId}
+                    statusText={voiceStatusLabel}
+                    transcriptPreview={liveTranscriptPreview}
+                    size="sm"
+                    onClick={handleOrbToggle}
+                  />
+                  <VoiceControls
+                    voiceState={voiceState}
+                    isRecognitionSupported={isRecognitionSupported}
+                    isSynthesisSupported={isSynthesisSupported}
+                    isListening={isListening}
+                    isPushToTalk={isPushToTalk}
+                    isSpeaking={isSpeaking}
+                    isPaused={isPaused}
+                    hasReplayableResponse={hasReplayableResponse}
+                    disabled={isSending}
+                    isMuted={isMuted}
+                    volume={volume}
+                    onToggleMute={onToggleMute}
+                    onVolumeChange={onVolumeChange}
+                    onStartListening={onStartListening}
+                    onStopListening={onStopListening}
+                    onStartPushToTalk={onStartPushToTalk}
+                    onStopPushToTalk={onStopPushToTalk}
+                    onCancelListening={onCancelListening}
+                    onReplayResponse={onReplayResponse}
+                    onStopSpeaking={onStopSpeaking}
+                    onPauseSpeaking={onPauseSpeaking}
+                    onResumeSpeaking={onResumeSpeaking}
+                  />
+                </div>
+
+                {/* Compact Speed & Controls Drawer Toggle */}
+                <div className="flex items-center gap-2">
+                  {firstTokenMs !== null && (
+                    <span className="hidden sm:inline-flex items-center gap-1 rounded-xl bg-[#34D399]/15 border border-[#34D399]/35 px-2.5 py-1 text-[11px] font-mono font-bold text-[#059669] dark:text-[#34D399]">
+                      <Zap className="h-3 w-3" />
+                      {firstTokenMs}ms
+                    </span>
+                  )}
+
+                  {onOpenImmersiveCall && (
+                    <button
+                      type="button"
+                      onClick={onOpenImmersiveCall}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#EC4899] via-[#8B5CF6] to-[#22D3EE] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:opacity-95"
+                    >
+                      <PhoneCall className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Live Call</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowActiveChatControls((prev) => !prev)}
+                    aria-expanded={showActiveChatControls}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors',
+                      showActiveChatControls
+                        ? 'border-[#22D3EE]/60 bg-[#22D3EE]/15 text-[#0284C7] dark:text-[#22D3EE]'
+                        : 'border-purple-200/70 dark:border-white/10 bg-white/80 dark:bg-[#171B2B] text-slate-600 dark:text-[#A1A1B8] hover:text-slate-900 dark:hover:text-white'
+                    )}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <span>Modes</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {onChangeStyleMode &&
-              onToggleHandsFreeLoop &&
-              onChangeSoundscape &&
-              onOpenImmersiveCall && (
-                <QuickModesDock
-                  styleMode={styleMode}
-                  handsFreeLoop={handsFreeLoop}
-                  soundscape={soundscape}
-                  firstTokenMs={firstTokenMs}
-                  onChangeStyleMode={onChangeStyleMode}
-                  onToggleHandsFreeLoop={onToggleHandsFreeLoop}
-                  onChangeSoundscape={onChangeSoundscape}
-                  onOpenImmersiveCall={onOpenImmersiveCall}
-                />
+              {/* On-Demand Expandable Quick Modes & Speed Analytics Drawer */}
+              {showActiveChatControls && (
+                <div className="mt-3 space-y-3 border-t border-purple-200/50 dark:border-white/[0.07] pt-3">
+                  {onChangeStyleMode &&
+                    onToggleHandsFreeLoop &&
+                    onChangeSoundscape &&
+                    onOpenImmersiveCall && (
+                      <QuickModesDock
+                        styleMode={styleMode}
+                        handsFreeLoop={handsFreeLoop}
+                        soundscape={soundscape}
+                        firstTokenMs={firstTokenMs}
+                        onChangeStyleMode={onChangeStyleMode}
+                        onToggleHandsFreeLoop={onToggleHandsFreeLoop}
+                        onChangeSoundscape={onChangeSoundscape}
+                        onOpenImmersiveCall={onOpenImmersiveCall}
+                      />
+                    )}
+                  <VoiceAnalyticsWidget
+                    messages={messages}
+                    language={language}
+                    sttLatencyMs={sttLatencyMs}
+                    firstTokenMs={firstTokenMs}
+                    llmLatencyMs={llmLatencyMs}
+                    ttsLatencyMs={ttsLatencyMs}
+                    isCachedResponse={isCachedResponse}
+                  />
+                </div>
               )}
-
-            <VoiceAnalyticsWidget
-              messages={messages}
-              language={language}
-              sttLatencyMs={sttLatencyMs}
-              firstTokenMs={firstTokenMs}
-              llmLatencyMs={llmLatencyMs}
-              ttsLatencyMs={ttsLatencyMs}
-              isCachedResponse={isCachedResponse}
-            />
+            </div>
 
             <div className="flex flex-col gap-4 pt-2" data-testid="message-list">
               {messages.map((msg) => (

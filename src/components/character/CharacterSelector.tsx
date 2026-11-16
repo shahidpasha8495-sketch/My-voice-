@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
-import { Check, Sparkles } from 'lucide-react';
-import React from 'react';
+import { Brain, Check, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
 import {
+  ALL_COMPANION_LIST,
   PLUSH_CHARACTER_LIST,
   type PlushCharacterConfig,
   type PlushCharacterId,
@@ -24,35 +25,48 @@ export const CharacterSelector: React.FC<CharacterSelectorProps> = ({
   compact = false,
   className,
 }) => {
+  const [showAllTen, setShowAllTen] = useState(true);
+  const displayedList = showAllTen ? ALL_COMPANION_LIST : PLUSH_CHARACTER_LIST;
+
   return (
     <div
       className={cn('w-full', className)}
       role="region"
-      aria-label="Choose your Plush AI companion"
+      aria-label="Choose your knowledgeable animated doll companion"
       data-testid="character-selector-carousel"
     >
       {!compact && (
-        <div className="mb-3 flex items-center justify-between px-1">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-[#A78BFA]" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-[#94A3B8]">
-              Choose Your Companion
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-[#94A3B8]">
+              Choose Your Knowledge Doll ({displayedList.length})
             </span>
           </div>
-          {onOpenGallery && (
+
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onOpenGallery}
-              className="text-xs font-semibold text-[#8B5CF6] dark:text-[#22D3EE] hover:underline"
+              onClick={() => setShowAllTen((prev) => !prev)}
+              className="text-xs font-semibold text-slate-500 dark:text-[#A1A1B8] hover:text-[#8B5CF6] dark:hover:text-[#22D3EE] transition-colors"
             >
-              Explore Character Gallery →
+              {showAllTen ? 'Show Core 5' : 'Show All 10 Experts'}
             </button>
-          )}
+            {onOpenGallery && (
+              <button
+                type="button"
+                onClick={onOpenGallery}
+                className="text-xs font-semibold text-[#8B5CF6] dark:text-[#22D3EE] hover:underline"
+              >
+                Explore Full Gallery →
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-        {PLUSH_CHARACTER_LIST.map((char: PlushCharacterConfig) => {
+        {displayedList.map((char: PlushCharacterConfig) => {
           const isSelected = char.id === selectedId;
           return (
             <motion.button
@@ -62,13 +76,13 @@ export const CharacterSelector: React.FC<CharacterSelectorProps> = ({
               whileTap={{ scale: 0.97 }}
               onClick={() => onSelect(char.id)}
               aria-pressed={isSelected}
-              aria-label={`Select ${char.name} - ${char.personality}`}
+              aria-label={`Select ${char.name} - ${char.knowledgeLevel}`}
               data-testid={`select-character-${char.id}`}
               className={cn(
                 'group relative flex flex-col items-center rounded-2xl border p-3 text-center transition-all backdrop-blur-xl',
                 isSelected
-                  ? 'border-[#8B5CF6] bg-white/90 dark:bg-[#171B2B]/95 shadow-glow-primary'
-                  : 'border-purple-200/60 dark:border-white/10 bg-white/65 dark:bg-[#171B2B]/55 hover:border-[#8B5CF6]/50'
+                  ? 'border-[#8B5CF6] bg-white/95 dark:bg-[#171B2B]/95 shadow-glow-primary'
+                  : 'border-purple-200/60 dark:border-white/10 bg-white/70 dark:bg-[#171B2B]/55 hover:border-[#8B5CF6]/50'
               )}
             >
               {isSelected && (
@@ -90,8 +104,12 @@ export const CharacterSelector: React.FC<CharacterSelectorProps> = ({
               <span className="mt-1.5 text-xs sm:text-sm font-bold text-slate-900 dark:text-[#F8FAFC]">
                 {char.name}
               </span>
-              <span className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-[#94A3B8] line-clamp-1">
-                {char.personality}
+              <span className="mt-0.5 text-[10px] font-bold text-[#8B5CF6] dark:text-[#22D3EE] line-clamp-1">
+                {char.knowledgeLevel}
+              </span>
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-100/70 dark:bg-white/[0.06] px-2 py-0.5 text-[9px] font-medium text-slate-600 dark:text-[#A1A1B8] line-clamp-1 max-w-full">
+                <Brain className="h-2.5 w-2.5 shrink-0 text-[#A855F7]" />
+                <span className="truncate">{char.specialtyBadges[0]}</span>
               </span>
             </motion.button>
           );

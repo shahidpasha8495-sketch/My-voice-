@@ -135,6 +135,9 @@ export const CompanionPanel: React.FC<CompanionPanelProps> = ({
           {companion.name}
         </h3>
         <p className="text-xs font-semibold text-[#22D3EE]">{companion.role}</p>
+        <p className="mt-0.5 text-[10px] font-medium text-[#C4B5FD]">
+          {companion.expertiseField}
+        </p>
         <p className="mt-1 text-[11px] text-[#A1A1B8] leading-relaxed">
           {companion.shortTrait}
         </p>

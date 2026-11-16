@@ -169,10 +169,10 @@ export const CharacterGallery: React.FC<CharacterGalleryProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className="rounded-xl bg-white/70 dark:bg-white/5 p-3 border border-purple-100 dark:border-white/10">
                     <span className="block font-semibold text-slate-500 dark:text-[#94A3B8]">
-                      Personality
+                      Knowledge Specialty
                     </span>
                     <span className="mt-0.5 block font-bold text-slate-900 dark:text-[#F8FAFC]">
-                      {activeChar.personality} ({activeChar.shortTrait})
+                      {activeChar.knowledgeLevel} · {activeChar.expertiseField}
                     </span>
                   </div>
                   <div className="rounded-xl bg-white/70 dark:bg-white/5 p-3 border border-purple-100 dark:border-white/10">

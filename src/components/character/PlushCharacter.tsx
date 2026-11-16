@@ -915,32 +915,67 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
             />
           )}
 
-          {/* GENI's Round Scholar Glasses */}
-          {characterId === 'geni' && (
+          {/* GENI's Round Scholar Glasses & ATLAS's Titanium Executive Frames */}
+          {(characterId === 'geni' || characterId === 'atlas') && (
             <g>
-              <circle
-                cx="96"
-                cy="118"
-                r="17"
-                fill="rgba(255,255,255,0.18)"
-                stroke="#1E293B"
-                strokeWidth="3.5"
-              />
-              <circle
-                cx="144"
-                cy="118"
-                r="17"
-                fill="rgba(255,255,255,0.18)"
-                stroke="#1E293B"
-                strokeWidth="3.5"
-              />
-              {/* Bridge of glasses */}
-              <path
-                d="M 113 118 Q 120 113 127 118"
-                fill="none"
-                stroke="#1E293B"
-                strokeWidth="3.5"
-              />
+              {characterId === 'atlas' ? (
+                <>
+                  <rect
+                    x="77"
+                    y="102"
+                    width="38"
+                    height="30"
+                    rx="8"
+                    fill="rgba(224,242,254,0.22)"
+                    stroke="#0F172A"
+                    strokeWidth="3.2"
+                  />
+                  <rect
+                    x="125"
+                    y="102"
+                    width="38"
+                    height="30"
+                    rx="8"
+                    fill="rgba(224,242,254,0.22)"
+                    stroke="#0F172A"
+                    strokeWidth="3.2"
+                  />
+                  <line
+                    x1="115"
+                    y1="115"
+                    x2="125"
+                    y2="115"
+                    stroke="#0F172A"
+                    strokeWidth="3.2"
+                  />
+                </>
+              ) : (
+                <>
+                  <circle
+                    cx="96"
+                    cy="118"
+                    r="17"
+                    fill="rgba(255,255,255,0.18)"
+                    stroke="#1E293B"
+                    strokeWidth="3.5"
+                  />
+                  <circle
+                    cx="144"
+                    cy="118"
+                    r="17"
+                    fill="rgba(255,255,255,0.18)"
+                    stroke="#1E293B"
+                    strokeWidth="3.5"
+                  />
+                  {/* Bridge of glasses */}
+                  <path
+                    d="M 113 118 Q 120 113 127 118"
+                    fill="none"
+                    stroke="#1E293B"
+                    strokeWidth="3.5"
+                  />
+                </>
+              )}
               {/* Lens Glint */}
               <line
                 x1="86"
@@ -961,6 +996,32 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
                 strokeWidth="2"
                 strokeLinecap="round"
                 opacity="0.75"
+              />
+            </g>
+          )}
+
+          {/* NOVA's Cyber Quantum Holographic Visor */}
+          {characterId === 'nova' && (
+            <g>
+              <rect
+                x="72"
+                y="102"
+                width="96"
+                height="30"
+                rx="15"
+                fill="rgba(14, 165, 233, 0.22)"
+                stroke="#22D3EE"
+                strokeWidth="2.5"
+              />
+              <line
+                x1="82"
+                y1="108"
+                x2="108"
+                y2="108"
+                stroke="#FFFFFF"
+                strokeWidth="2"
+                strokeLinecap="round"
+                opacity="0.65"
               />
             </g>
           )}
