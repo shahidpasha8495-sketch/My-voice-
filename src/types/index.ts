@@ -34,6 +34,15 @@ export type ConnectionState = 'online' | 'connecting' | 'offline';
 
 export type InputMode = 'text' | 'voice';
 
+export type ConversationStyleMode =
+  | 'turbo'
+  | 'tutor'
+  | 'brainstorm'
+  | 'calm'
+  | 'coder';
+
+export type SoundscapeType = 'off' | 'rain' | 'aurora';
+
 export type MessageRole = 'user' | 'assistant';
 
 /**
@@ -123,12 +132,15 @@ export interface ChatRequestPayload {
   language: SupportedLanguage;
   inputMode: InputMode;
   characterId?: string;
+  styleMode?: ConversationStyleMode;
+  stream?: boolean;
   history?: Array<Pick<Message, 'role' | 'content'>>;
 }
 
 export interface VoicePipelineLatency {
   sttMs: number;
   llmMs: number;
+  firstTokenMs?: number;
   ttsStartMs: number;
   totalMs: number;
   cached: boolean;
@@ -141,6 +153,7 @@ export interface ChatResponsePayload {
   assistantMessage: Message;
   conversation?: Conversation;
   detectedLanguage?: SupportedLanguage;
+  firstTokenMs?: number;
   latencyMs?: number;
   cached?: boolean;
   error?: string;

@@ -19,6 +19,7 @@ import { PlushCharacter } from '../character/PlushCharacter';
 export interface MessageBubbleProps {
   message: Message;
   characterId?: PlushCharacterId;
+  isStreaming?: boolean;
   isSpeakingThisMessage?: boolean;
   isSynthesisSupported?: boolean;
   onSpeak?: (text: string, lang: SupportedLanguage, messageId: string) => void;
@@ -73,6 +74,7 @@ function renderSafeFormattedContent(content: string): React.ReactNode {
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   characterId,
+  isStreaming = false,
   isSpeakingThisMessage = false,
   isSynthesisSupported = true,
   onSpeak,
@@ -148,16 +150,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       >
         {/* Companion Header on AI Messages */}
         {!isUser && (
-          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-[#8B5CF6] dark:text-[#22D3EE]">
-            <span>{companion.name}</span>
-            <span className="text-slate-400 dark:text-[#72758E] font-normal">
-              · {companion.role}
-            </span>
+          <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-bold text-[#8B5CF6] dark:text-[#22D3EE]">
+            <div className="flex items-center gap-1.5">
+              <span>{companion.name}</span>
+              <span className="text-slate-400 dark:text-[#72758E] font-normal">
+                · {companion.role}
+              </span>
+            </div>
+            {isStreaming && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#22D3EE]/15 px-2 py-0.5 text-[9px] font-extrabold text-[#22D3EE] animate-pulse">
+                STREAMING LIVE
+              </span>
+            )}
           </div>
         )}
 
         {/* Message Content */}
-        <div className="text-[14px]">{renderSafeFormattedContent(message.content)}</div>
+        <div className="text-[14px]">
+          {renderSafeFormattedContent(message.content)}
+          {isStreaming && (
+            <span
+              aria-hidden="true"
+              className="ml-1 inline-block h-4 w-1.5 align-middle rounded-sm bg-[#22D3EE] animate-pulse"
+            />
+          )}
+        </div>
 
         {/* Footer Metadata & Action Controls */}
         <div

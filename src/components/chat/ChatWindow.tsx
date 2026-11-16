@@ -15,13 +15,20 @@ import {
   getDailyGreeting,
   type PlushCharacterId,
 } from '../../config/characters';
-import type { Message, SupportedLanguage, VoiceState } from '../../types';
+import type {
+  ConversationStyleMode,
+  Message,
+  SoundscapeType,
+  SupportedLanguage,
+  VoiceState,
+} from '../../types';
 import { FOLLOW_UP_QUICK_ACTIONS, getLanguageMetadata } from '../../utils/language';
 import { CharacterSelector } from '../character/CharacterSelector';
 import { VoiceControls } from '../voice/VoiceControls';
 import { VoiceOrb } from '../voice/VoiceOrb';
 import { WeatherUvWidget } from '../weather/WeatherUvWidget';
 import { MessageBubble } from './MessageBubble';
+import { QuickModesDock } from './QuickModesDock';
 import { TypingIndicator } from './TypingIndicator';
 import { VoiceAnalyticsWidget } from './VoiceAnalyticsWidget';
 
@@ -33,6 +40,7 @@ export interface ChatWindowProps {
   liveTranscriptPreview: string;
   isLoadingHistory: boolean;
   isSending: boolean;
+  streamingMessageId?: string | null;
   chatError: string | null;
   voiceError: string | null;
   isRecognitionSupported: boolean;
@@ -47,10 +55,18 @@ export interface ChatWindowProps {
   hasReplayableResponse: boolean;
   selectedCharacterId?: PlushCharacterId;
   userDisplayName?: string | null;
+  styleMode?: ConversationStyleMode;
+  handsFreeLoop?: boolean;
+  soundscape?: SoundscapeType;
   sttLatencyMs?: number | null;
+  firstTokenMs?: number | null;
   llmLatencyMs?: number | null;
   ttsLatencyMs?: number | null;
   isCachedResponse?: boolean;
+  onChangeStyleMode?: (mode: ConversationStyleMode) => void;
+  onToggleHandsFreeLoop?: () => void;
+  onChangeSoundscape?: (soundscape: SoundscapeType) => void;
+  onOpenImmersiveCall?: () => void;
   onRetryConnection?: () => void;
   onToggleMute?: () => void;
   onVolumeChange?: (volume: number) => void;
@@ -80,6 +96,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   liveTranscriptPreview,
   isLoadingHistory,
   isSending,
+  streamingMessageId = null,
   chatError,
   voiceError,
   isRecognitionSupported,
@@ -94,10 +111,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   hasReplayableResponse,
   selectedCharacterId = 'mellow',
   userDisplayName,
+  styleMode = 'turbo',
+  handsFreeLoop = false,
+  soundscape = 'off',
   sttLatencyMs = null,
+  firstTokenMs = null,
   llmLatencyMs = null,
   ttsLatencyMs = null,
   isCachedResponse = false,
+  onChangeStyleMode,
+  onToggleHandsFreeLoop,
+  onChangeSoundscape,
+  onOpenImmersiveCall,
   onRetryConnection,
   onToggleMute,
   onVolumeChange,
@@ -308,12 +333,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               )}
             </div>
 
+            {/* Turbo Speed Modes, Hands-Free Auto Loop, Soundscape & Live Call Dock */}
+            {onChangeStyleMode &&
+              onToggleHandsFreeLoop &&
+              onChangeSoundscape &&
+              onOpenImmersiveCall && (
+                <div className="w-full max-w-4xl mb-6">
+                  <QuickModesDock
+                    styleMode={styleMode}
+                    handsFreeLoop={handsFreeLoop}
+                    soundscape={soundscape}
+                    firstTokenMs={firstTokenMs}
+                    onChangeStyleMode={onChangeStyleMode}
+                    onToggleHandsFreeLoop={onToggleHandsFreeLoop}
+                    onChangeSoundscape={onChangeSoundscape}
+                    onOpenImmersiveCall={onOpenImmersiveCall}
+                  />
+                </div>
+              )}
+
             {/* Real-Time Voice Pipeline Telemetry & Usage Analytics */}
             <div className="w-full max-w-4xl mb-7">
               <VoiceAnalyticsWidget
                 messages={messages}
                 language={language}
                 sttLatencyMs={sttLatencyMs}
+                firstTokenMs={firstTokenMs}
                 llmLatencyMs={llmLatencyMs}
                 ttsLatencyMs={ttsLatencyMs}
                 isCachedResponse={isCachedResponse}
@@ -408,10 +453,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             </div>
 
+            {onChangeStyleMode &&
+              onToggleHandsFreeLoop &&
+              onChangeSoundscape &&
+              onOpenImmersiveCall && (
+                <QuickModesDock
+                  styleMode={styleMode}
+                  handsFreeLoop={handsFreeLoop}
+                  soundscape={soundscape}
+                  firstTokenMs={firstTokenMs}
+                  onChangeStyleMode={onChangeStyleMode}
+                  onToggleHandsFreeLoop={onToggleHandsFreeLoop}
+                  onChangeSoundscape={onChangeSoundscape}
+                  onOpenImmersiveCall={onOpenImmersiveCall}
+                />
+              )}
+
             <VoiceAnalyticsWidget
               messages={messages}
               language={language}
               sttLatencyMs={sttLatencyMs}
+              firstTokenMs={firstTokenMs}
               llmLatencyMs={llmLatencyMs}
               ttsLatencyMs={ttsLatencyMs}
               isCachedResponse={isCachedResponse}
@@ -423,6 +485,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   key={msg.id}
                   message={msg}
                   characterId={selectedCharacterId}
+                  isStreaming={streamingMessageId === msg.id}
                   isSpeakingThisMessage={
                     isSpeaking && activeSpeakingMessageId === msg.id
                   }
@@ -432,7 +495,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 />
               ))}
 
-              {isSending && <TypingIndicator />}
+              {isSending && !streamingMessageId && <TypingIndicator />}
 
               {/* Smart 1-Click Follow-Up Actions after Assistant Response */}
               {!isSending &&

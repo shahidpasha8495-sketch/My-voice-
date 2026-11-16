@@ -38,12 +38,22 @@ export const messageContentSchema = z
     message: `Message cannot exceed ${MAX_MESSAGE_LENGTH} characters.`,
   });
 
+export const conversationStyleModeSchema = z.enum([
+  'turbo',
+  'tutor',
+  'brainstorm',
+  'calm',
+  'coder',
+]);
+
 export const chatRequestSchema = z.object({
   conversationId: uuidSchema,
   message: messageContentSchema,
   language: supportedLanguageSchema,
   inputMode: inputModeSchema.default('text'),
   characterId: z.string().max(32).optional(),
+  styleMode: conversationStyleModeSchema.optional(),
+  stream: z.boolean().optional(),
   history: z
     .array(
       z.object({

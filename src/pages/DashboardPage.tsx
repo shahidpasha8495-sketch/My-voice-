@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CharacterGallery } from '../components/character/CharacterGallery';
 import { CompanionPanel } from '../components/character/CompanionPanel';
 import { ChatHeader } from '../components/chat/ChatHeader';
@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { AppLayout } from '../components/layout/AppLayout';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { Sidebar, type DashboardViewMode } from '../components/sidebar/Sidebar';
+import { ImmersiveCallOverlay } from '../components/voice/ImmersiveCallOverlay';
 import { VoiceStudio } from '../components/voice/VoiceStudio';
 import { useAuth } from '../hooks/useAuth';
 import { useCharacter } from '../hooks/useCharacter';
@@ -18,7 +19,15 @@ import { useLanguagePreference } from '../hooks/useLanguagePreference';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 import { useVoiceState } from '../hooks/useVoiceState';
-import type { Conversation, InputMode, Message, SupportedLanguage } from '../types';
+import type {
+  Conversation,
+  ConversationStyleMode,
+  InputMode,
+  Message,
+  SoundscapeType,
+  SupportedLanguage,
+} from '../types';
+import { soundscapeEngine } from '../utils/soundEffects';
 
 export const DashboardPage: React.FC = () => {
   const { user, profile, updateProfile, signOut } = useAuth();
@@ -58,7 +67,76 @@ export const DashboardPage: React.FC = () => {
     clearConversationError,
   } = useConversations();
 
-  const speechSynthesis = useSpeechSynthesis(language);
+  const [styleMode, setStyleMode] = useState<ConversationStyleMode>('turbo');
+  const [handsFreeLoop, setHandsFreeLoop] = useState<boolean>(false);
+  const [soundscape, setSoundscape] = useState<SoundscapeType>('off');
+  const [isImmersiveCallOpen, setIsImmersiveCallOpen] = useState<boolean>(false);
+
+  const handsFreeLoopRef = useRef<boolean>(handsFreeLoop);
+  handsFreeLoopRef.current = handsFreeLoop;
+  const startHandsFreeMicRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    soundscapeEngine.setSoundscape(soundscape);
+    return () => {
+      soundscapeEngine.stop();
+    };
+  }, [soundscape]);
+
+  const speechSynthesis = useSpeechSynthesis(language, {
+    onPlaybackComplete: () => {
+      if (handsFreeLoopRef.current) {
+        setTimeout(() => {
+          startHandsFreeMicRef.current?.();
+        }, 260);
+      }
+    },
+  });
+
+  const handleStreamStart = useCallback(
+    (streamLang: SupportedLanguage, inputMode: InputMode, messageId: string) => {
+      if (
+        speechSynthesis.isSupported &&
+        (inputMode === 'voice' || autoSpeakResponses)
+      ) {
+        speechSynthesis.beginStreamingSpeech(streamLang, messageId);
+      }
+    },
+    [autoSpeakResponses, speechSynthesis]
+  );
+
+  const handleStreamSentence = useCallback(
+    (
+      sentence: string,
+      sentenceLang: SupportedLanguage,
+      inputMode: InputMode,
+      messageId: string
+    ) => {
+      if (
+        speechSynthesis.isSupported &&
+        (inputMode === 'voice' || autoSpeakResponses)
+      ) {
+        speechSynthesis.enqueueStreamingSentence(
+          sentence,
+          sentenceLang,
+          messageId
+        );
+      }
+    },
+    [autoSpeakResponses, speechSynthesis]
+  );
+
+  const handleStreamComplete = useCallback(
+    (inputMode: InputMode) => {
+      if (
+        speechSynthesis.isSupported &&
+        (inputMode === 'voice' || autoSpeakResponses)
+      ) {
+        speechSynthesis.finishStreamingSpeech();
+      }
+    },
+    [autoSpeakResponses, speechSynthesis]
+  );
 
   const handleAssistantResponse = useCallback(
     (assistantMessage: Message, inputMode: InputMode) => {
@@ -82,12 +160,18 @@ export const DashboardPage: React.FC = () => {
     messages,
     isLoadingHistory,
     isSending,
+    streamingMessageId,
     error: chatError,
+    lastFirstTokenMs,
     lastLlmLatencyMs,
     lastResponseCached,
     sendMessage,
     clearChatError,
   } = useChat({
+    styleMode,
+    onStreamStart: handleStreamStart,
+    onStreamSentence: handleStreamSentence,
+    onStreamComplete: handleStreamComplete,
     onAssistantResponse: handleAssistantResponse,
   });
 
@@ -101,6 +185,7 @@ export const DashboardPage: React.FC = () => {
 
   const speechRecognition = useSpeechRecognition({
     language,
+    turboMode: styleMode === 'turbo',
     onTranscriptReady: handleVoiceTranscriptReady,
   });
 
@@ -118,12 +203,47 @@ export const DashboardPage: React.FC = () => {
     void speechRecognition.startListening(language);
   }, [language, speechRecognition, speechSynthesis]);
 
+  useEffect(() => {
+    startHandsFreeMicRef.current = handleStartListening;
+  }, [handleStartListening]);
+
   const handleStartPushToTalk = useCallback(() => {
     if (speechSynthesis.isSpeaking) {
       speechSynthesis.stop();
     }
-    speechRecognition.startPushToTalk(language);
+    void speechRecognition.startPushToTalk(language);
   }, [language, speechRecognition, speechSynthesis]);
+
+  // Global Spacebar Push-to-Talk hotkey when not typing inside an input/textarea
+  useEffect(() => {
+    if (!speechRecognition.isSupported) return;
+    let isSpaceHeld = false;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      const targetTag = (e.target as HTMLElement | null)?.tagName || '';
+      if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(targetTag)) {
+        return;
+      }
+      e.preventDefault();
+      isSpaceHeld = true;
+      handleStartPushToTalk();
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || !isSpaceHeld) return;
+      e.preventDefault();
+      isSpaceHeld = false;
+      speechRecognition.stopPushToTalk();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleStartPushToTalk, speechRecognition]);
 
   const handleNewConversation = useCallback(() => {
     speechRecognition.cancelListening();
@@ -306,6 +426,7 @@ export const DashboardPage: React.FC = () => {
             liveTranscriptPreview={liveTranscriptPreview}
             isLoadingHistory={isLoadingHistory}
             isSending={isSending}
+            streamingMessageId={streamingMessageId}
             chatError={combinedChatError}
             voiceError={voiceError?.message || null}
             isRecognitionSupported={speechRecognition.isSupported}
@@ -322,10 +443,18 @@ export const DashboardPage: React.FC = () => {
             )}
             selectedCharacterId={characterId}
             userDisplayName={profile?.display_name || user?.email?.split('@')[0]}
+            styleMode={styleMode}
+            handsFreeLoop={handsFreeLoop}
+            soundscape={soundscape}
             sttLatencyMs={speechRecognition.lastSttLatencyMs}
+            firstTokenMs={lastFirstTokenMs}
             llmLatencyMs={lastLlmLatencyMs}
             ttsLatencyMs={speechSynthesis.lastTtsLatencyMs}
             isCachedResponse={lastResponseCached}
+            onChangeStyleMode={setStyleMode}
+            onToggleHandsFreeLoop={() => setHandsFreeLoop((prev) => !prev)}
+            onChangeSoundscape={setSoundscape}
+            onOpenImmersiveCall={() => setIsImmersiveCallOpen(true)}
             onRetryConnection={() => void retryConnection()}
             onToggleMute={speechSynthesis.toggleMute}
             onVolumeChange={speechSynthesis.setVolume}
@@ -395,6 +524,31 @@ export const DashboardPage: React.FC = () => {
         onChangeAutoDetect={setAutoDetect}
         onChangeAutoSpeak={setAutoSpeakResponses}
         onSignOut={() => void signOut()}
+      />
+
+      <ImmersiveCallOverlay
+        isOpen={isImmersiveCallOpen}
+        characterId={characterId}
+        language={language}
+        voiceState={voiceState}
+        voiceStatusLabel={stateLabel}
+        liveTranscript={liveTranscriptPreview}
+        latestAssistantMessage={latestAssistantMessage}
+        isListening={speechRecognition.isListening}
+        isPushToTalk={speechRecognition.isPushToTalk}
+        isSpeaking={speechSynthesis.isSpeaking}
+        isMuted={speechSynthesis.isMuted}
+        handsFreeLoop={handsFreeLoop}
+        firstTokenMs={lastFirstTokenMs}
+        ttsLatencyMs={speechSynthesis.lastTtsLatencyMs}
+        onStartListening={handleStartListening}
+        onStopListening={speechRecognition.stopListening}
+        onStartPushToTalk={handleStartPushToTalk}
+        onStopPushToTalk={speechRecognition.stopPushToTalk}
+        onStopSpeaking={speechSynthesis.stop}
+        onToggleMute={speechSynthesis.toggleMute}
+        onToggleHandsFreeLoop={() => setHandsFreeLoop((prev) => !prev)}
+        onClose={() => setIsImmersiveCallOpen(false)}
       />
 
       <ConfirmDialog

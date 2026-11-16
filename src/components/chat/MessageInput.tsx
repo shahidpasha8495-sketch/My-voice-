@@ -175,9 +175,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         {/* Helper Footer */}
         <div className="mt-1.5 flex items-center justify-between px-1 text-[11px] text-slate-500 dark:text-[#72758E]">
           <span>
-            Press <kbd className="rounded bg-white/10 px-1 py-0.5 text-[10px]">Enter</kbd> to
-            send, <kbd className="rounded bg-white/10 px-1 py-0.5 text-[10px]">Shift+Enter</kbd>{' '}
-            for new line · {langMeta.nativeName}
+            <kbd className="rounded bg-white/10 px-1 py-0.5 text-[10px]">Enter</kbd> to
+            send · Hold <kbd className="rounded bg-white/10 px-1 py-0.5 text-[10px]">Space</kbd>{' '}
+            anywhere to talk · {langMeta.nativeName}
           </span>
           {isNearLimit && (
             <span

@@ -70,6 +70,10 @@ function createMockReqRes(options: {
     getHeader(name: string) {
       return headersMap[name.toLowerCase()];
     },
+    write(chunk: string) {
+      if (chunk) rawBody += chunk;
+      return true;
+    },
     end(chunk?: string) {
       if (chunk) rawBody += chunk;
     },
@@ -80,6 +84,7 @@ function createMockReqRes(options: {
     res,
     getStatus: () => statusCode,
     getHeaders: () => headersMap,
+    getRawBody: () => rawBody,
     getJson: () => (rawBody ? JSON.parse(rawBody) : null),
   };
 }
@@ -434,5 +439,50 @@ describe('Integration & Security: Backend API Routes & Database RLS Policies', (
     expect(sql).toContain('CREATE TRIGGER on_auth_user_created');
     expect(sql).toContain("role = 'user'");
     expect(sql).toContain('REFERENCES public.conversations(id) ON DELETE CASCADE');
+  });
+
+  it('streams SSE meta, delta, and done events cleanly when stream=true in guest turbo mode', async () => {
+    async function* mockSseGenerator() {
+      yield {
+        event_type: 'step.delta',
+        index: 0,
+        delta: { type: 'text', text: 'Fast ' },
+      };
+      yield {
+        event_type: 'step.delta',
+        index: 1,
+        delta: { type: 'text', text: 'streaming reply.' },
+      };
+    }
+
+    mockInteractionsCreate.mockResolvedValueOnce(mockSseGenerator());
+
+    const { req, res, getStatus, getHeaders, getRawBody } = createMockReqRes({
+      method: 'POST',
+      url: '/api/chat?stream=1',
+      headers: {
+        authorization: 'Bearer guest-session-token',
+      },
+      query: { stream: '1' },
+      body: {
+        conversationId: '550e8400-e29b-41d4-a716-446655440000',
+        message: 'Explain photosynthesis quickly',
+        language: 'en-US',
+        inputMode: 'voice',
+        styleMode: 'turbo',
+        stream: true,
+      },
+    });
+
+    await chatHandler(req, res);
+    expect(getStatus()).toBe(200);
+    expect(getHeaders()['content-type']).toContain('text/event-stream');
+
+    const raw = getRawBody();
+    expect(raw).toContain('event: meta');
+    expect(raw).toContain('event: delta');
+    expect(raw).toContain('Fast ');
+    expect(raw).toContain('streaming reply.');
+    expect(raw).toContain('event: done');
   });
 });

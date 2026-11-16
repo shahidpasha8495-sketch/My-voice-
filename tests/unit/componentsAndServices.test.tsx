@@ -8,8 +8,10 @@ import {
   resolveGeminiModel,
 } from '../../api/_lib/gemini';
 import { MessageBubble } from '../../src/components/chat/MessageBubble';
+import { QuickModesDock } from '../../src/components/chat/QuickModesDock';
 import { VoiceAnalyticsWidget } from '../../src/components/chat/VoiceAnalyticsWidget';
 import { LanguageSelector } from '../../src/components/common/LanguageSelector';
+import { ImmersiveCallOverlay } from '../../src/components/voice/ImmersiveCallOverlay';
 import { VoiceControls } from '../../src/components/voice/VoiceControls';
 import { VoiceOrb } from '../../src/components/voice/VoiceOrb';
 import type { Message } from '../../src/types';
@@ -120,6 +122,7 @@ describe('Unit: Gemini Context Builder & Model Resolution', () => {
           messages={[]}
           language="en-US"
           sttLatencyMs={180}
+          firstTokenMs={240}
           llmLatencyMs={520}
           ttsLatencyMs={22}
           isCachedResponse={true}
@@ -148,5 +151,77 @@ describe('Unit: Gemini Context Builder & Model Resolution', () => {
     expect(screen.getByText(/722ms E2E/i)).toBeInTheDocument();
     expect(screen.getByTestId('push-to-talk-button')).toBeInTheDocument();
     expect(screen.getByText(/Interrupt & Speak/i)).toBeInTheDocument();
+  });
+
+  it('renders QuickModesDock, ImmersiveCallOverlay, and streaming MessageBubble with Turbo mode', () => {
+    const onChangeStyleMode = vi.fn();
+    const onToggleHandsFreeLoop = vi.fn();
+    const onOpenImmersiveCall = vi.fn();
+
+    render(
+      <>
+        <QuickModesDock
+          styleMode="turbo"
+          handsFreeLoop={true}
+          soundscape="aurora"
+          firstTokenMs={215}
+          onChangeStyleMode={onChangeStyleMode}
+          onToggleHandsFreeLoop={onToggleHandsFreeLoop}
+          onChangeSoundscape={vi.fn()}
+          onOpenImmersiveCall={onOpenImmersiveCall}
+        />
+        <MessageBubble
+          message={{
+            id: 'stream-1',
+            conversation_id: 'conv-1',
+            role: 'assistant',
+            content: 'Streaming fast reply',
+            input_mode: 'text',
+            language: 'en-US',
+            created_at: new Date().toISOString(),
+          }}
+          isStreaming={true}
+        />
+        <ImmersiveCallOverlay
+          isOpen={true}
+          characterId="mellow"
+          language="en-US"
+          voiceState="speaking"
+          voiceStatusLabel="Talking to you..."
+          liveTranscript="How fast can you answer?"
+          isListening={false}
+          isPushToTalk={false}
+          isSpeaking={true}
+          isMuted={false}
+          handsFreeLoop={true}
+          firstTokenMs={215}
+          ttsLatencyMs={18}
+          onStartListening={vi.fn()}
+          onStopListening={vi.fn()}
+          onStartPushToTalk={vi.fn()}
+          onStopPushToTalk={vi.fn()}
+          onStopSpeaking={vi.fn()}
+          onToggleMute={vi.fn()}
+          onToggleHandsFreeLoop={onToggleHandsFreeLoop}
+          onClose={vi.fn()}
+        />
+      </>
+    );
+
+    expect(screen.getByTestId('quick-modes-dock')).toBeInTheDocument();
+    expect(screen.getByText(/STREAMING LIVE/i)).toBeInTheDocument();
+    expect(screen.getByTestId('immersive-call-overlay')).toBeInTheDocument();
+    expect(screen.getByText(/LIVE VOICE CALL/i)).toBeInTheDocument();
+    expect(screen.getByText(/TTFT 215ms/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('style-mode-coder'));
+    expect(onChangeStyleMode).toHaveBeenCalledWith('coder');
+
+    fireEvent.click(screen.getByTestId('launch-immersive-call-button'));
+    expect(onOpenImmersiveCall).toHaveBeenCalled();
+
+    expect(
+      buildSystemInstruction('en-US', { styleMode: 'turbo' })
+    ).toContain('Turbo Instant');
   });
 });

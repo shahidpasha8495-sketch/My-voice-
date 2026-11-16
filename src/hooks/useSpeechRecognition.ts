@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SupportedLanguage, VoiceError, VoiceErrorCode } from '../types';
+import { playMicOpenChime, playMicStopChime } from '../utils/soundEffects';
 import { useVoiceState } from './useVoiceState';
 
 interface SpeechRecognitionAlternative {
@@ -73,8 +74,9 @@ export function isSecureMicrophoneContext(): boolean {
 
 export interface UseSpeechRecognitionOptions {
   language?: SupportedLanguage;
-  /** Silence duration (ms) after speech before VAD auto-stops listening. Default: 1350ms */
+  /** Silence duration (ms) after speech before VAD auto-stops listening. Default: 750ms in turboMode, 1350ms otherwise */
   vadSilenceMs?: number;
+  turboMode?: boolean;
   onTranscriptReady?: (
     transcript: string,
     language: SupportedLanguage,
@@ -103,7 +105,8 @@ export function useSpeechRecognition(
 ): UseSpeechRecognitionReturn {
   const {
     language = 'en-US',
-    vadSilenceMs = 1350,
+    turboMode = true,
+    vadSilenceMs = turboMode ? 750 : 1350,
     onTranscriptReady,
   } = options;
   const { transitionTo, setVoiceErrorState, setInteractionMode } = useVoiceState();
@@ -257,7 +260,7 @@ export function useSpeechRecognition(
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
 
-        const scheduleVadAutoStop = () => {
+        const scheduleVadAutoStop = (customMs?: number) => {
           if (isPushToTalkRef.current) return;
           if (vadTimerRef.current) {
             clearTimeout(vadTimerRef.current);
@@ -270,17 +273,19 @@ export function useSpeechRecognition(
               (collectedFinalRef.current || collectedInterimRef.current)
             ) {
               try {
+                playMicStopChime();
                 transitionTo('processing');
                 recognitionRef.current.stop();
               } catch {
                 // ignore
               }
             }
-          }, vadSilenceMs);
+          }, customMs ?? vadSilenceMs);
         };
 
         recognition.onstart = () => {
           setIsListening(true);
+          playMicOpenChime();
           transitionTo('listening');
 
           // If no speech is detected within 8 seconds in normal mode, stop cleanly
@@ -339,7 +344,12 @@ export function useSpeechRecognition(
 
           if (finalText.trim() || interimText.trim()) {
             transitionTo('speech_detected');
-            scheduleVadAutoStop();
+            // Snappier auto-submit when the browser finalizes the whole phrase with no active interim words
+            const fastDelay =
+              turboMode && finalText.trim() && !interimText.trim()
+                ? Math.min(520, vadSilenceMs)
+                : vadSilenceMs;
+            scheduleVadAutoStop(fastDelay);
           }
         };
 

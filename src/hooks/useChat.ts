@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { sendChatMessage } from '../services/chatService';
+import { sendChatMessageStream } from '../services/chatService';
 import { getConversationWithMessages } from '../services/conversationService';
-import type { InputMode, Message, SupportedLanguage } from '../types';
+import type {
+  ConversationStyleMode,
+  InputMode,
+  Message,
+  SupportedLanguage,
+} from '../types';
+import { playFirstTokenChime } from '../utils/soundEffects';
 import { validateMessageInput } from '../utils/validation';
 import { useAuth } from './useAuth';
 import { useCharacter } from './useCharacter';
@@ -10,6 +16,19 @@ import { useLanguagePreference } from './useLanguagePreference';
 import { useVoiceState } from './useVoiceState';
 
 export interface UseChatOptions {
+  styleMode?: ConversationStyleMode;
+  onStreamStart?: (
+    language: SupportedLanguage,
+    inputMode: InputMode,
+    messageId: string
+  ) => void;
+  onStreamSentence?: (
+    sentence: string,
+    language: SupportedLanguage,
+    inputMode: InputMode,
+    messageId: string
+  ) => void;
+  onStreamComplete?: (inputMode: InputMode) => void;
   onAssistantResponse?: (message: Message, inputMode: InputMode) => void;
 }
 
@@ -17,7 +36,9 @@ export interface UseChatReturn {
   messages: Message[];
   isLoadingHistory: boolean;
   isSending: boolean;
+  streamingMessageId: string | null;
   error: string | null;
+  lastFirstTokenMs: number | null;
   lastLlmLatencyMs: number | null;
   lastResponseCached: boolean;
   sendMessage: (
@@ -30,7 +51,13 @@ export interface UseChatReturn {
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
-  const { onAssistantResponse } = options;
+  const {
+    styleMode = 'turbo',
+    onStreamStart,
+    onStreamSentence,
+    onStreamComplete,
+    onAssistantResponse,
+  } = options;
   const { accessToken } = useAuth();
   const { characterId } = useCharacter();
   const {
@@ -44,12 +71,17 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastFirstTokenMs, setLastFirstTokenMs] = useState<number | null>(null);
   const [lastLlmLatencyMs, setLastLlmLatencyMs] = useState<number | null>(null);
   const [lastResponseCached, setLastResponseCached] = useState<boolean>(false);
 
   const isSubmittingRef = useRef<boolean>(false);
   const skipNextFetchForConvRef = useRef<string | null>(null);
+  const onStreamStartRef = useRef(onStreamStart);
+  const onStreamSentenceRef = useRef(onStreamSentence);
+  const onStreamCompleteRef = useRef(onStreamComplete);
   const onAssistantResponseRef = useRef(onAssistantResponse);
   const messagesRef = useRef<Message[]>([]);
 
@@ -58,8 +90,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [messages]);
 
   useEffect(() => {
+    onStreamStartRef.current = onStreamStart;
+    onStreamSentenceRef.current = onStreamSentence;
+    onStreamCompleteRef.current = onStreamComplete;
     onAssistantResponseRef.current = onAssistantResponse;
-  }, [onAssistantResponse]);
+  }, [onAssistantResponse, onStreamComplete, onStreamSentence, onStreamStart]);
 
   // Load messages when activeConversationId changes
   useEffect(() => {
@@ -133,11 +168,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setError(null);
       transitionTo('generating_response');
 
-      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticUserId = `optimistic-u-${Date.now()}`;
+      const optimisticAssistantId = `optimistic-a-${Date.now() + 1}`;
 
       // Show optimistic user message on the VERY FIRST FRAME (0ms UI latency)
       const optimisticUserMsg: Message = {
-        id: optimisticId,
+        id: optimisticUserId,
         conversation_id: activeConversationId || 'pending-conversation',
         role: 'user',
         content: validation.sanitized,
@@ -164,34 +200,90 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           .map((m) => ({ role: m.role, content: m.content }));
 
         const llmStartPerf = performance.now();
-        const response = await sendChatMessage(
+        let hasInitializedStreamingBubble = false;
+        let detectedStreamLang = effectiveLanguage;
+
+        onStreamStartRef.current?.(
+          effectiveLanguage,
+          inputMode,
+          optimisticAssistantId
+        );
+
+        const response = await sendChatMessageStream(
           {
             conversationId: targetConversationId,
             message: validation.sanitized,
             language: effectiveLanguage,
             inputMode,
             characterId,
+            styleMode,
+            stream: true,
             history: recentHistory,
           },
-          accessToken
+          accessToken,
+          {
+            onMeta: ({ detectedLanguage }) => {
+              detectedStreamLang = detectedLanguage;
+            },
+            onToken: (_chunk, fullText, firstTokenMs) => {
+              if (!hasInitializedStreamingBubble) {
+                hasInitializedStreamingBubble = true;
+                playFirstTokenChime();
+                setLastFirstTokenMs(firstTokenMs);
+                setStreamingMessageId(optimisticAssistantId);
+                const liveAssistantMsg: Message = {
+                  id: optimisticAssistantId,
+                  conversation_id: targetConversationId!,
+                  role: 'assistant',
+                  content: fullText,
+                  input_mode: 'text',
+                  language: detectedStreamLang,
+                  created_at: new Date().toISOString(),
+                };
+                setMessages((prev) => [...prev, liveAssistantMsg]);
+              } else {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === optimisticAssistantId
+                      ? { ...m, content: fullText }
+                      : m
+                  )
+                );
+              }
+            },
+            onSentenceReady: (sentence, sentenceLang) => {
+              onStreamSentenceRef.current?.(
+                sentence,
+                sentenceLang,
+                inputMode,
+                optimisticAssistantId
+              );
+            },
+          }
         );
+
+        setStreamingMessageId(null);
 
         const measuredLlmMs =
           response.latencyMs ??
           Math.max(5, Math.round(performance.now() - llmStartPerf));
+        const measuredTtftMs = response.firstTokenMs ?? measuredLlmMs;
+        setLastFirstTokenMs(measuredTtftMs);
         setLastLlmLatencyMs(measuredLlmMs);
         setLastResponseCached(Boolean(response.cached));
 
         // Log stage latency breakdown for developer visibility
         if (typeof console !== 'undefined' && console.info) {
           console.info(
-            `[MyVoice Latency] Mode=${inputMode} | LLM=${measuredLlmMs}ms | Cached=${Boolean(response.cached)} | Context=${recentHistory.length}/20 msgs`
+            `[MyVoice Speed] Mode=${inputMode}/${styleMode} | FirstToken=${measuredTtftMs}ms | TotalLLM=${measuredLlmMs}ms | Cached=${Boolean(response.cached)} | Context=${recentHistory.length}/20`
           );
         }
 
-        // Replace optimistic user message with persisted message and append assistant message
+        // Replace optimistic messages with final canonical messages
         setMessages((prev) => [
-          ...prev.filter((m) => m.id !== optimisticId),
+          ...prev.filter(
+            (m) => m.id !== optimisticUserId && m.id !== optimisticAssistantId
+          ),
           response.userMessage,
           response.assistantMessage,
         ]);
@@ -200,16 +292,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           language: response.detectedLanguage || effectiveLanguage,
         });
 
-        transitionTo('idle');
+        onStreamCompleteRef.current?.(inputMode);
 
-        if (onAssistantResponseRef.current) {
+        if (onAssistantResponseRef.current && !hasInitializedStreamingBubble) {
           onAssistantResponseRef.current(response.assistantMessage, inputMode);
         }
 
         return response.assistantMessage;
       } catch (err) {
-        // Remove optimistic message on failure so user can retry cleanly
-        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        setStreamingMessageId(null);
+        // Remove optimistic messages on failure so user can retry cleanly
+        setMessages((prev) =>
+          prev.filter(
+            (m) => m.id !== optimisticUserId && m.id !== optimisticAssistantId
+          )
+        );
         const errMessage =
           err instanceof Error
             ? err.message
@@ -228,6 +325,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       characterId,
       ensureActiveConversation,
       resolveEffectiveLanguage,
+      styleMode,
       touchConversation,
       transitionTo,
     ]
@@ -239,6 +337,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
   const resetMessages = useCallback(() => {
     setMessages([]);
+    setStreamingMessageId(null);
     setError(null);
   }, []);
 
@@ -246,7 +345,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     messages,
     isLoadingHistory,
     isSending,
+    streamingMessageId,
     error,
+    lastFirstTokenMs,
     lastLlmLatencyMs,
     lastResponseCached,
     sendMessage,

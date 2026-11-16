@@ -1,7 +1,7 @@
-import type { Message } from '../src/types';
+import type { ConversationStyleMode, InputMode, Message, SupportedLanguage } from '../src/types';
 import { detectMessageLanguage } from '../src/utils/language';
 import { CONTEXT_WINDOW_LIMIT, chatRequestSchema } from '../src/utils/validation';
-import { generateGeminiReply } from './_lib/gemini';
+import { generateGeminiReply, generateGeminiReplyStream } from './_lib/gemini';
 import {
   ApiError,
   applySecurityHeaders,
@@ -21,6 +21,131 @@ import {
 
 const GUEST_BEARER_HEADER = 'bearer guest-session-token';
 
+function writeSseEvent(res: VercelResponse, eventName: string, data: unknown): void {
+  res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function initSseResponse(res: VercelResponse): void {
+  applySecurityHeaders(res);
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+}
+
+async function streamReplyToSseResponse(params: {
+  res: VercelResponse;
+  conversationId: string;
+  message: string;
+  effectiveLanguage: SupportedLanguage;
+  inputMode: InputMode;
+  characterId?: string;
+  styleMode?: ConversationStyleMode;
+  historyMessages: Pick<Message, 'role' | 'content'>[];
+  idPrefix: string;
+  persistTurn?: (assistantText: string) => Promise<{
+    userMessage?: Message | null;
+    assistantMessage?: Message | null;
+  }>;
+}): Promise<void> {
+  const {
+    res,
+    conversationId,
+    message,
+    effectiveLanguage,
+    inputMode,
+    characterId,
+    styleMode,
+    historyMessages,
+    idPrefix,
+    persistTurn,
+  } = params;
+
+  const streamStartPerf = performance.now();
+  initSseResponse(res);
+
+  const nowIso = new Date().toISOString();
+  const baseUserMsg: Message = {
+    id: `${idPrefix}-u-${Date.now()}`,
+    conversation_id: conversationId,
+    role: 'user',
+    content: message,
+    input_mode: inputMode,
+    language: effectiveLanguage,
+    created_at: nowIso,
+  };
+
+  writeSseEvent(res, 'meta', {
+    conversationId,
+    detectedLanguage: effectiveLanguage,
+    userMessage: baseUserMsg,
+  });
+
+  let fullText = '';
+  let firstTokenMs: number | undefined;
+
+  try {
+    const stream = generateGeminiReplyStream({
+      historyMessages,
+      currentMessage: message,
+      language: effectiveLanguage,
+      characterId,
+      inputMode,
+      styleMode,
+    });
+
+    for await (const piece of stream) {
+      if (!piece) continue;
+      if (firstTokenMs === undefined) {
+        firstTokenMs = Math.max(5, Math.round(performance.now() - streamStartPerf));
+      }
+      fullText += piece;
+      writeSseEvent(res, 'delta', {
+        text: piece,
+        firstTokenMs,
+      });
+    }
+
+    const totalMs = Math.max(8, Math.round(performance.now() - streamStartPerf));
+    let finalUserMsg = baseUserMsg;
+    let finalAssistantMsg: Message = {
+      id: `${idPrefix}-a-${Date.now() + 1}`,
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: fullText.trim() || 'I am ready—please ask again!',
+      input_mode: 'text',
+      language: effectiveLanguage,
+      created_at: new Date(Date.now() + 1).toISOString(),
+    };
+
+    if (persistTurn) {
+      try {
+        const persisted = await persistTurn(finalAssistantMsg.content);
+        if (persisted.userMessage) finalUserMsg = persisted.userMessage;
+        if (persisted.assistantMessage) finalAssistantMsg = persisted.assistantMessage;
+      } catch {
+        // Return streamed reply even if background DB save encounters an issue
+      }
+    }
+
+    writeSseEvent(res, 'done', {
+      success: true,
+      userMessage: finalUserMsg,
+      assistantMessage: finalAssistantMsg,
+      detectedLanguage: effectiveLanguage,
+      firstTokenMs: firstTokenMs ?? totalMs,
+      latencyMs: totalMs,
+    });
+    res.end();
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error ? err.message : 'Unable to stream AI response.';
+    writeSseEvent(res, 'error', { success: false, error: msg });
+    res.end();
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   applySecurityHeaders(res);
 
@@ -36,10 +161,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       .trim()
       .toLowerCase();
     const isGuestRequest = authHeaderStr === GUEST_BEARER_HEADER;
+    const acceptHeader = String(req.headers.accept || '').toLowerCase();
+    const streamQuery = req.query?.stream === '1' || req.query?.stream === 'true';
 
-    // 1. Handle Guest Mode requests (ultra-fast direct Gemini response without DB round-trips)
+    // 1. Handle Guest Mode requests (ultra-fast direct Gemini streaming/response without DB round-trips)
     if (isGuestRequest) {
-      const rateLimit = checkRateLimit(getClientIdentifier(req, 'guest'), 20, 60_000);
+      const rateLimit = checkRateLimit(getClientIdentifier(req, 'guest'), 30, 60_000);
       applyRateLimitHeaders(res, rateLimit);
       if (!rateLimit.allowed) {
         sendError(
@@ -58,9 +185,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         throw new ApiError(400, firstIssue, 'VALIDATION_ERROR');
       }
 
-      const { conversationId, message, language, inputMode, characterId, history } = parsed.data;
+      const {
+        conversationId,
+        message,
+        language,
+        inputMode,
+        characterId,
+        styleMode,
+        stream,
+        history,
+      } = parsed.data;
       const detection = detectMessageLanguage(message, language);
       const effectiveLanguage = detection.language;
+      const wantsStream = Boolean(stream || streamQuery || acceptHeader.includes('text/event-stream'));
+
+      if (wantsStream) {
+        await streamReplyToSseResponse({
+          res,
+          conversationId,
+          message,
+          effectiveLanguage,
+          inputMode,
+          characterId,
+          styleMode,
+          historyMessages: history ?? [],
+          idPrefix: 'guest',
+        });
+        return;
+      }
 
       const aiReplyText = await generateGeminiReply({
         historyMessages: history ?? [],
@@ -68,6 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         language: effectiveLanguage,
         characterId,
         inputMode,
+        styleMode,
       });
 
       const nowIso = new Date().toISOString();
@@ -107,7 +260,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     ]);
 
     // 3. Enforce per-user rate limit
-    const rateLimit = checkRateLimit(getClientIdentifier(req, identity.userId), 20, 60_000);
+    const rateLimit = checkRateLimit(getClientIdentifier(req, identity.userId), 30, 60_000);
     applyRateLimitHeaders(res, rateLimit);
     if (!rateLimit.allowed) {
       sendError(
@@ -126,8 +279,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       throw new ApiError(400, firstIssue, 'VALIDATION_ERROR');
     }
 
-    const { conversationId, message, language, inputMode, characterId, history } = parsed.data;
+    const {
+      conversationId,
+      message,
+      language,
+      inputMode,
+      characterId,
+      styleMode,
+      stream,
+      history,
+    } = parsed.data;
     const isVitest = Boolean(process.env.VITEST);
+    const wantsStream = Boolean(stream || streamQuery || acceptHeader.includes('text/event-stream'));
 
     // 5. Verify conversation ownership using the authenticated user's RLS client
     const userSupabase = createUserSupabaseClient(identity.accessToken);
@@ -145,12 +308,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       // Graceful fallback if remote Supabase tables are not migrated yet
       const detection = detectMessageLanguage(message, language);
       const effectiveLanguage = detection.language;
+      if (wantsStream) {
+        await streamReplyToSseResponse({
+          res,
+          conversationId,
+          message,
+          effectiveLanguage,
+          inputMode,
+          characterId,
+          styleMode,
+          historyMessages: history ?? [],
+          idPrefix: 'user',
+        });
+        return;
+      }
       const aiReplyText = await generateGeminiReply({
         historyMessages: history ?? [],
         currentMessage: message,
         language: effectiveLanguage,
         characterId,
         inputMode,
+        styleMode,
       });
       const nowIso = new Date().toISOString();
       sendJson(res, 200, {
@@ -200,7 +378,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const chronologicalHistory: Message[] = ((recentRows ?? []) as Message[]).slice().reverse();
 
-    // 8 & 9. Run user message DB insert AND Gemini generation IN PARALLEL for maximum speed!
+    // Streaming SSE path for authenticated users: stream tokens FIRST, save user+assistant turns concurrently/right after!
+    if (wantsStream) {
+      const userInsertPromise = userSupabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          role: 'user',
+          content: message,
+          input_mode: inputMode,
+          language: effectiveLanguage,
+        })
+        .select('id, conversation_id, role, content, input_mode, language, created_at')
+        .single();
+
+      await streamReplyToSseResponse({
+        res,
+        conversationId,
+        message,
+        effectiveLanguage,
+        inputMode,
+        characterId,
+        styleMode,
+        historyMessages: chronologicalHistory,
+        idPrefix: 'auth',
+        persistTurn: async (assistantText: string) => {
+          const { data: savedUserMessage } = await userInsertPromise;
+          let savedAssistantMessage: Message | null = null;
+          try {
+            const privilegedSupabase = createPrivilegedSupabaseClient();
+            const [assistantRes] = await Promise.all([
+              privilegedSupabase
+                .from('messages')
+                .insert({
+                  conversation_id: conversationId,
+                  role: 'assistant',
+                  content: assistantText,
+                  input_mode: 'text',
+                  language: effectiveLanguage,
+                })
+                .select('id, conversation_id, role, content, input_mode, language, created_at')
+                .single(),
+              privilegedSupabase
+                .from('conversations')
+                .update({
+                  updated_at: new Date().toISOString(),
+                  language: effectiveLanguage,
+                })
+                .eq('id', conversationId)
+                .eq('user_id', identity.userId),
+            ]);
+            if (!assistantRes.error && assistantRes.data) {
+              savedAssistantMessage = assistantRes.data as Message;
+            }
+          } catch {
+            // Non-blocking fallback
+          }
+          return {
+            userMessage: (savedUserMessage as Message | null) ?? null,
+            assistantMessage: savedAssistantMessage,
+          };
+        },
+      });
+      return;
+    }
+
+    // 8 & 9. Non-streaming path: Run user message DB insert AND Gemini generation IN PARALLEL
     const userInsertPromise = userSupabase
       .from('messages')
       .insert({
@@ -219,6 +462,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       language: effectiveLanguage,
       characterId,
       inputMode,
+      styleMode,
     });
 
     const [{ data: savedUserMessage, error: userInsertError }, aiReplyText] =

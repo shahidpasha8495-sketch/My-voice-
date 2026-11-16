@@ -136,6 +136,10 @@ export function selectBestVoice(
   return null;
 }
 
+export interface UseSpeechSynthesisOptions {
+  onPlaybackComplete?: () => void;
+}
+
 export interface UseSpeechSynthesisReturn {
   isSupported: boolean;
   isSpeaking: boolean;
@@ -150,6 +154,13 @@ export interface UseSpeechSynthesisReturn {
   availableVoices: SpeechSynthesisVoice[];
   error: VoiceError | null;
   speak: (text: string, lang?: SupportedLanguage, messageId?: string) => void;
+  beginStreamingSpeech: (lang?: SupportedLanguage, messageId?: string) => void;
+  enqueueStreamingSentence: (
+    sentence: string,
+    lang?: SupportedLanguage,
+    messageId?: string
+  ) => void;
+  finishStreamingSpeech: () => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -160,7 +171,8 @@ export interface UseSpeechSynthesisReturn {
 }
 
 export function useSpeechSynthesis(
-  defaultLanguage: SupportedLanguage = 'en-US'
+  defaultLanguage: SupportedLanguage = 'en-US',
+  options: UseSpeechSynthesisOptions = {}
 ): UseSpeechSynthesisReturn {
   const { transitionTo, setVoiceErrorState } = useVoiceState();
   const { characterId } = useCharacter();
@@ -184,6 +196,18 @@ export function useSpeechSynthesis(
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const playbackSessionRef = useRef<number>(0);
   const speakRequestTimestampRef = useRef<number>(0);
+  const streamQueueRef = useRef<
+    Array<{ text: string; lang: SupportedLanguage; messageId?: string }>
+  >([]);
+  const isUtterancePlayingRef = useRef<boolean>(false);
+  const isStreamOpenRef = useRef<boolean>(false);
+  const streamSessionIdRef = useRef<number>(0);
+  const streamAccumulatedTextRef = useRef<string>('');
+  const onPlaybackCompleteRef = useRef(options.onPlaybackComplete);
+
+  useEffect(() => {
+    onPlaybackCompleteRef.current = options.onPlaybackComplete;
+  }, [options.onPlaybackComplete]);
 
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
@@ -243,6 +267,9 @@ export function useSpeechSynthesis(
 
   const stop = useCallback(() => {
     playbackSessionRef.current += 1;
+    streamQueueRef.current = [];
+    isUtterancePlayingRef.current = false;
+    isStreamOpenRef.current = false;
     if (!isSupported || typeof window === 'undefined') return;
     try {
       window.speechSynthesis.cancel();
@@ -255,6 +282,178 @@ export function useSpeechSynthesis(
     setActiveMessageId(null);
     transitionTo('idle');
   }, [isSupported, transitionTo]);
+
+  const pumpStreamQueue = useCallback(
+    (session: number) => {
+      if (playbackSessionRef.current !== session) return;
+      if (isUtterancePlayingRef.current) return;
+
+      const nextItem = streamQueueRef.current.shift();
+      if (!nextItem) {
+        if (!isStreamOpenRef.current) {
+          setIsSpeaking(false);
+          setIsPaused(false);
+          setActiveMessageId(null);
+          utteranceRef.current = null;
+          transitionTo('idle');
+          onPlaybackCompleteRef.current?.();
+        }
+        return;
+      }
+
+      if (
+        !isSupported ||
+        typeof window === 'undefined' ||
+        typeof SpeechSynthesisUtterance === 'undefined' ||
+        isMuted ||
+        volume <= 0
+      ) {
+        streamQueueRef.current = [];
+        return;
+      }
+
+      const voices =
+        availableVoices.length > 0
+          ? availableVoices
+          : window.speechSynthesis.getVoices();
+      const manualVoice = selectedVoiceURI
+        ? voices.find(
+            (v) => v.voiceURI === selectedVoiceURI || v.name === selectedVoiceURI
+          ) || null
+        : null;
+      const chosenVoice = manualVoice || selectBestVoice(voices, nextItem.lang);
+      const prosody =
+        COMPANION_VOICE_PROSODY[characterId] || COMPANION_VOICE_PROSODY.mellow;
+
+      const utterance = new SpeechSynthesisUtterance(nextItem.text);
+      utterance.lang = nextItem.lang;
+      utterance.rate = prosody.rate;
+      utterance.pitch = prosody.pitch;
+      utterance.volume = volume;
+      if (chosenVoice) {
+        utterance.voice = chosenVoice;
+      }
+
+      isUtterancePlayingRef.current = true;
+      utterance.onstart = () => {
+        if (playbackSessionRef.current !== session) return;
+        if (speakRequestTimestampRef.current > 0) {
+          const ttsFirstAudioMs = Math.max(
+            6,
+            Math.round(performance.now() - speakRequestTimestampRef.current)
+          );
+          setLastTtsLatencyMs(ttsFirstAudioMs);
+          speakRequestTimestampRef.current = 0;
+        }
+        setIsSpeaking(true);
+        setIsPaused(false);
+        setActiveMessageId(nextItem.messageId ?? null);
+        transitionTo('speaking');
+      };
+
+      utterance.onpause = () => {
+        if (playbackSessionRef.current !== session) return;
+        setIsPaused(true);
+        transitionTo('paused');
+      };
+
+      utterance.onresume = () => {
+        if (playbackSessionRef.current !== session) return;
+        setIsPaused(false);
+        transitionTo('speaking');
+      };
+
+      utterance.onend = () => {
+        if (playbackSessionRef.current !== session) return;
+        isUtterancePlayingRef.current = false;
+        pumpStreamQueue(session);
+      };
+
+      utterance.onerror = (event) => {
+        if (playbackSessionRef.current !== session) return;
+        isUtterancePlayingRef.current = false;
+        if (event.error === 'canceled' || event.error === 'interrupted') {
+          setIsSpeaking(false);
+          setIsPaused(false);
+          setActiveMessageId(null);
+          return;
+        }
+        pumpStreamQueue(session);
+      };
+
+      utteranceRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
+    },
+    [
+      availableVoices,
+      characterId,
+      isMuted,
+      isSupported,
+      selectedVoiceURI,
+      transitionTo,
+      volume,
+    ]
+  );
+
+  const beginStreamingSpeech = useCallback(
+    (lang: SupportedLanguage = defaultLanguage, messageId?: string) => {
+      if (!isSupported || typeof window === 'undefined') return;
+      playbackSessionRef.current += 1;
+      const session = playbackSessionRef.current;
+      streamSessionIdRef.current = session;
+      streamQueueRef.current = [];
+      streamAccumulatedTextRef.current = '';
+      isUtterancePlayingRef.current = false;
+      isStreamOpenRef.current = true;
+      speakRequestTimestampRef.current = performance.now();
+      setLastSpokenLang(lang);
+      setActiveMessageId(messageId ?? null);
+
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // ignore
+      }
+    },
+    [defaultLanguage, isSupported]
+  );
+
+  const enqueueStreamingSentence = useCallback(
+    (
+      rawSentence: string,
+      lang: SupportedLanguage = defaultLanguage,
+      messageId?: string
+    ) => {
+      if (!isSupported || isMuted || volume <= 0) return;
+      const cleaned = cleanTextForSpeech(rawSentence);
+      if (!cleaned) return;
+
+      streamAccumulatedTextRef.current = streamAccumulatedTextRef.current
+        ? `${streamAccumulatedTextRef.current} ${cleaned}`
+        : cleaned;
+      setLastSpokenText(streamAccumulatedTextRef.current);
+      setLastSpokenLang(lang);
+
+      const session = streamSessionIdRef.current || playbackSessionRef.current;
+      streamQueueRef.current.push({ text: cleaned, lang, messageId });
+      pumpStreamQueue(session);
+    },
+    [defaultLanguage, isMuted, isSupported, pumpStreamQueue, volume]
+  );
+
+  const finishStreamingSpeech = useCallback(() => {
+    isStreamOpenRef.current = false;
+    const session = streamSessionIdRef.current || playbackSessionRef.current;
+    if (!isUtterancePlayingRef.current && streamQueueRef.current.length === 0) {
+      if (playbackSessionRef.current === session) {
+        setIsSpeaking(false);
+        setIsPaused(false);
+        setActiveMessageId(null);
+        transitionTo('idle');
+        onPlaybackCompleteRef.current?.();
+      }
+    }
+  }, [transitionTo]);
 
   const speak = useCallback(
     (
@@ -367,6 +566,7 @@ export function useSpeechSynthesis(
               setActiveMessageId(null);
               utteranceRef.current = null;
               transitionTo('idle');
+              onPlaybackCompleteRef.current?.();
             }
           };
 
@@ -458,6 +658,9 @@ export function useSpeechSynthesis(
     availableVoices,
     error,
     speak,
+    beginStreamingSpeech,
+    enqueueStreamingSentence,
+    finishStreamingSpeech,
     pause,
     resume,
     stop,

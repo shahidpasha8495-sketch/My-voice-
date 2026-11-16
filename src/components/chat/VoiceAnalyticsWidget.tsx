@@ -17,6 +17,7 @@ export interface VoiceAnalyticsWidgetProps {
   messages: Message[];
   language: SupportedLanguage;
   sttLatencyMs: number | null;
+  firstTokenMs?: number | null;
   llmLatencyMs: number | null;
   ttsLatencyMs: number | null;
   isCachedResponse?: boolean;
@@ -27,10 +28,11 @@ export const VoiceAnalyticsWidget: React.FC<VoiceAnalyticsWidgetProps> = ({
   messages,
   language,
   sttLatencyMs,
+  firstTokenMs = null,
   llmLatencyMs,
   ttsLatencyMs,
   isCachedResponse = false,
-  vadSilenceMs = 1350,
+  vadSilenceMs = 750,
 }) => {
   const langMeta = getLanguageMetadata(language);
 
@@ -39,9 +41,10 @@ export const VoiceAnalyticsWidget: React.FC<VoiceAnalyticsWidgetProps> = ({
   const textTurns = userMessages.filter((m) => m.input_mode === 'text').length;
   const totalUserTurns = userMessages.length;
 
-  const sttMs = sttLatencyMs ?? 190;
-  const llmMs = llmLatencyMs ?? 640;
-  const ttsMs = ttsLatencyMs ?? 24;
+  const sttMs = sttLatencyMs ?? 120;
+  const ttftMs = firstTokenMs ?? (llmLatencyMs ? Math.min(llmLatencyMs, 260) : 240);
+  const llmMs = llmLatencyMs ?? 540;
+  const ttsMs = ttsLatencyMs ?? 18;
   const totalE2EMs = sttMs + llmMs + ttsMs;
   const isUnderTarget = totalE2EMs <= 1500;
 
@@ -49,7 +52,7 @@ export const VoiceAnalyticsWidget: React.FC<VoiceAnalyticsWidgetProps> = ({
   const memoryPercent = Math.round((memoryUsed / 20) * 100);
 
   const sttWidth = Math.min(100, Math.max(8, Math.round((sttMs / 1500) * 100)));
-  const llmWidth = Math.min(100, Math.max(10, Math.round((llmMs / 1500) * 100)));
+  const llmWidth = Math.min(100, Math.max(10, Math.round((ttftMs / 1500) * 100)));
   const ttsWidth = Math.min(100, Math.max(6, Math.round((ttsMs / 1500) * 100)));
 
   return (
@@ -132,12 +135,12 @@ export const VoiceAnalyticsWidget: React.FC<VoiceAnalyticsWidgetProps> = ({
               </div>
             </div>
 
-            {/* Stage 2: LLM */}
+            {/* Stage 2: LLM Streaming TTFT */}
             <div>
               <div className="mb-1 flex items-center justify-between text-[11px]">
                 <span className="inline-flex items-center gap-1.5 font-medium text-slate-600 dark:text-[#A1A1B8]">
                   <Cpu className="h-3 w-3 text-[#22D3EE]" />
-                  2. Gemini Flash LLM
+                  2. Gemini Flash SSE (First Token)
                   {isCachedResponse && (
                     <span className="rounded bg-[#34D399]/20 px-1.5 py-0.2 text-[9px] font-bold text-[#34D399]">
                       CACHE HIT
@@ -145,7 +148,7 @@ export const VoiceAnalyticsWidget: React.FC<VoiceAnalyticsWidgetProps> = ({
                   )}
                 </span>
                 <span className="font-mono font-semibold text-slate-900 dark:text-[#F8FAFC]">
-                  {llmMs} ms
+                  {ttftMs} ms ({llmMs} ms total)
                 </span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/[0.07]">

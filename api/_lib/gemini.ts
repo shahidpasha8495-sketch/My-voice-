@@ -1,5 +1,10 @@
 import { GoogleGenAI } from '@google/genai';
-import type { InputMode, Message, SupportedLanguage } from '../../src/types';
+import type {
+  ConversationStyleMode,
+  InputMode,
+  Message,
+  SupportedLanguage,
+} from '../../src/types';
 import { CONTEXT_WINDOW_LIMIT } from '../../src/utils/validation';
 import { ApiError } from './http';
 
@@ -67,9 +72,23 @@ const COMPANION_PERSONA_MAP: Record<string, string> = {
     'Active Companion Persona — Zen (Relaxed & Thoughtful): Speak with grounded mindfulness, balanced perspective, and effortless simplicity.',
 };
 
+const STYLE_MODE_MAP: Record<ConversationStyleMode, string> = {
+  turbo:
+    'Style Mode — Turbo Instant: Give the fastest, highest-signal answer in crisp 1-2 sentences or ultra-tight bullet points. Zero fluff or preamble.',
+  tutor:
+    'Style Mode — Smart Tutor: Teach clearly using a quick real-world analogy and one memorable takeaway.',
+  brainstorm:
+    'Style Mode — Deep Brainstorm: Offer 2-3 fresh, creative, high-leverage ideas or perspectives immediately.',
+  calm:
+    'Style Mode — Calm Check-In: Speak gently, reassuringly, and thoughtfully with grounded clarity.',
+  coder:
+    'Style Mode — Code Co-Pilot: Give clean, production-ready technical solutions, concise commands, and zero filler.',
+};
+
 export interface BuildSystemInstructionOptions {
   characterId?: string;
   inputMode?: InputMode;
+  styleMode?: ConversationStyleMode;
 }
 
 export function buildSystemInstruction(
@@ -103,13 +122,14 @@ export function buildSystemInstruction(
 
   const personaKey = (options.characterId || '').toLowerCase();
   const personaDirective = COMPANION_PERSONA_MAP[personaKey] || COMPANION_PERSONA_MAP.cloudy;
+  const styleDirective = options.styleMode ? `\n\n${STYLE_MODE_MAP[options.styleMode]}` : '';
 
   const modeDirective =
     options.inputMode === 'voice'
       ? 'Delivery Mode — Natural Spoken Voice: The user spoke this message aloud and will hear your response read aloud via voice synthesis. Reply in 1 to 3 short, natural spoken sentences. Do NOT use markdown formatting, asterisks, bullet points, or emojis in voice replies.'
-      : 'Delivery Mode — Interactive Chat: Deliver a highly relevant, immediately useful answer. Use clean formatting, concrete examples, or concise bullet points when they make the answer easier to scan and apply.';
+      : 'Delivery Mode — Interactive Chat: Deliver a highly relevant, immediately useful answer. Keep it crisp and scannable so the user gets immediate value.';
 
-  return `${BASE_SYSTEM_INSTRUCTION}\n\n${personaDirective}\n\n${modeDirective}\n\nLanguage Guidance: ${languageDirectiveMap[targetLanguage] || languageDirectiveMap['en-US']}`;
+  return `${BASE_SYSTEM_INSTRUCTION}\n\n${personaDirective}${styleDirective}\n\n${modeDirective}\n\nLanguage Guidance: ${languageDirectiveMap[targetLanguage] || languageDirectiveMap['en-US']}`;
 }
 
 /**
@@ -206,18 +226,19 @@ export function buildConversationSteps(
 
 /**
  * Secondary direct REST fallback against standard Google AI Studio generateContent models
- * (gemini-2.5-flash, gemini-2.0-flash) if the Interactions endpoint is not enabled for the key.
+ * (gemini-2.5-flash-lite, gemini-2.5-flash, gemini-2.0-flash) if the Interactions endpoint is not enabled for the key.
  */
 async function tryStandardGeminiRestApi(params: {
   apiKey: string;
   systemInstruction: string;
   steps: InteractionStepInput[];
   inputMode?: InputMode;
+  styleMode?: ConversationStyleMode;
   signal: AbortSignal;
 }): Promise<string | null> {
-  const { apiKey, systemInstruction, steps, inputMode, signal } = params;
-  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-  const maxOutputTokens = inputMode === 'voice' ? 180 : 900;
+  const { apiKey, systemInstruction, steps, inputMode, styleMode, signal } = params;
+  const candidateModels = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  const maxOutputTokens = inputMode === 'voice' || styleMode === 'turbo' ? 160 : 750;
 
   const contents = steps.map((step) => ({
     role: step.type === 'model_output' ? 'model' : 'user',
@@ -238,6 +259,9 @@ async function tryStandardGeminiRestApi(params: {
           generationConfig: {
             temperature: 0.65,
             maxOutputTokens,
+            thinkingConfig: modelName.startsWith('gemini-2.5')
+              ? { thinkingBudget: 0 }
+              : undefined,
           },
         }),
         signal,
@@ -264,6 +288,102 @@ async function tryStandardGeminiRestApi(params: {
   }
 
   return null;
+}
+
+/**
+ * True token-by-token SSE streaming fallback using standard Google AI Studio
+ * `:streamGenerateContent?alt=sse` on ultra-fast flash-lite / flash models.
+ */
+async function* streamStandardGeminiRestApi(params: {
+  apiKey: string;
+  systemInstruction: string;
+  steps: InteractionStepInput[];
+  inputMode?: InputMode;
+  styleMode?: ConversationStyleMode;
+  signal: AbortSignal;
+}): AsyncGenerator<string, boolean, void> {
+  const { apiKey, systemInstruction, steps, inputMode, styleMode, signal } = params;
+  const candidateModels = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  const maxOutputTokens = inputMode === 'voice' || styleMode === 'turbo' ? 160 : 750;
+
+  const contents = steps.map((step) => ({
+    role: step.type === 'model_output' ? 'model' : 'user',
+    parts: step.content.map((c) => ({ text: c.text })),
+  }));
+
+  for (const modelName of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemInstruction }],
+          },
+          contents,
+          generationConfig: {
+            temperature: 0.65,
+            maxOutputTokens,
+            thinkingConfig: modelName.startsWith('gemini-2.5')
+              ? { thinkingBudget: 0 }
+              : undefined,
+          },
+        }),
+        signal,
+      });
+
+      if (!response.ok || !response.body) continue;
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let emittedAny = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIdx = buffer.indexOf('\n');
+        while (newlineIdx !== -1) {
+          const line = buffer.slice(0, newlineIdx).trim();
+          buffer = buffer.slice(newlineIdx + 1);
+          newlineIdx = buffer.indexOf('\n');
+
+          if (!line.startsWith('data:')) continue;
+          const jsonStr = line.slice(5).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr) as {
+              candidates?: Array<{
+                content?: { parts?: Array<{ text?: string }> };
+              }>;
+            };
+            const piece =
+              parsed.candidates?.[0]?.content?.parts
+                ?.map((p) => p.text || '')
+                .join('') || '';
+            if (piece) {
+              emittedAny = true;
+              yield piece;
+            }
+          } catch {
+            // Skip malformed partial SSE frames
+          }
+        }
+      }
+
+      if (emittedAny) {
+        return true;
+      }
+    } catch {
+      // Try next fast model
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -373,7 +493,153 @@ export interface GenerateGeminiReplyParams {
   language: SupportedLanguage;
   characterId?: string;
   inputMode?: InputMode;
+  styleMode?: ConversationStyleMode;
   timeoutMs?: number;
+}
+
+export async function* generateGeminiReplyStream({
+  historyMessages,
+  currentMessage,
+  language,
+  characterId,
+  inputMode,
+  styleMode,
+  timeoutMs = 20_000,
+}: GenerateGeminiReplyParams): AsyncGenerator<string, void, void> {
+  // 1. Instant unclear-audio clarification (< 1ms)
+  const clarification = getClarifyingQuestionForUnclearAudio(
+    currentMessage,
+    language,
+    inputMode
+  );
+  if (clarification) {
+    yield clarification;
+    return;
+  }
+
+  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+  const isVitest = Boolean(process.env.VITEST);
+
+  if (!apiKey) {
+    if (isVitest) {
+      throw new ApiError(
+        503,
+        'AI response could not be generated because the server Gemini API key is not configured.',
+        'GEMINI_NOT_CONFIGURED'
+      );
+    }
+    const fallbackText = generateResilientCompanionReply({
+      currentMessage,
+      language,
+      characterId,
+      historyMessages,
+    });
+    const tokens = fallbackText.split(/(\s+)/);
+    for (let i = 0; i < tokens.length; i += 3) {
+      yield tokens.slice(i, i + 3).join('');
+      await new Promise((r) => setTimeout(r, 8));
+    }
+    return;
+  }
+
+  const model = resolveGeminiModel(process.env.GEMINI_MODEL);
+  const systemInstruction = buildSystemInstruction(language, {
+    characterId,
+    inputMode,
+    styleMode,
+  });
+  const steps = buildConversationSteps(historyMessages, currentMessage, CONTEXT_WINDOW_LIMIT);
+  const maxOutputTokens = inputMode === 'voice' || styleMode === 'turbo' ? 160 : 750;
+  const client = getGeminiClient(apiKey);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let streamedAny = false;
+
+  try {
+    const stream = await client.interactions.create(
+      {
+        model,
+        system_instruction: systemInstruction,
+        input: steps,
+        generation_config: {
+          thinking_level: 'minimal',
+          max_output_tokens: maxOutputTokens,
+        },
+        store: false,
+        stream: true,
+      },
+      {
+        signal: controller.signal,
+      }
+    );
+
+    for await (const event of stream) {
+      if (event.event_type === 'step.delta' && event.delta.type === 'text') {
+        const piece = event.delta.text;
+        if (piece) {
+          streamedAny = true;
+          yield piece;
+        }
+      }
+    }
+
+    if (streamedAny) {
+      clearTimeout(timeoutId);
+      return;
+    }
+  } catch {
+    // Fall through cleanly to direct REST SSE stream
+  }
+
+  if (!streamedAny && !isVitest) {
+    try {
+      const restGenerator = streamStandardGeminiRestApi({
+        apiKey,
+        systemInstruction,
+        steps,
+        inputMode,
+        styleMode,
+        signal: controller.signal,
+      });
+
+      for await (const piece of restGenerator) {
+        streamedAny = true;
+        yield piece;
+      }
+
+      if (streamedAny) {
+        return;
+      }
+    } catch {
+      // Fall through to resilient local fast stream
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } else {
+    clearTimeout(timeoutId);
+  }
+
+  if (!streamedAny) {
+    if (isVitest) {
+      throw new ApiError(
+        502,
+        'AI response could not be generated. Please try again.',
+        'GEMINI_ERROR'
+      );
+    }
+    const fallbackText = generateResilientCompanionReply({
+      currentMessage,
+      language,
+      characterId,
+      historyMessages,
+    });
+    const tokens = fallbackText.split(/(\s+)/);
+    for (let i = 0; i < tokens.length; i += 3) {
+      yield tokens.slice(i, i + 3).join('');
+      await new Promise((r) => setTimeout(r, 8));
+    }
+  }
 }
 
 export async function generateGeminiReply({
@@ -382,7 +648,8 @@ export async function generateGeminiReply({
   language,
   characterId,
   inputMode,
-  timeoutMs = 25_000,
+  styleMode,
+  timeoutMs = 20_000,
 }: GenerateGeminiReplyParams): Promise<string> {
   // Handle unclear or garbled voice audio immediately with a friendly clarifying question
   const clarification = getClarifyingQuestionForUnclearAudio(
@@ -417,11 +684,12 @@ export async function generateGeminiReply({
   const systemInstruction = buildSystemInstruction(language, {
     characterId,
     inputMode,
+    styleMode,
   });
   const steps = buildConversationSteps(historyMessages, currentMessage, CONTEXT_WINDOW_LIMIT);
 
   const client = getGeminiClient(apiKey);
-  const thinkingLevel = model.includes('flash-lite') ? 'minimal' : 'low';
+  const maxOutputTokens = inputMode === 'voice' || styleMode === 'turbo' ? 160 : 750;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -433,7 +701,8 @@ export async function generateGeminiReply({
         system_instruction: systemInstruction,
         input: steps,
         generation_config: {
-          thinking_level: thinkingLevel,
+          thinking_level: 'minimal',
+          max_output_tokens: maxOutputTokens,
         },
         store: false,
       },
@@ -484,6 +753,7 @@ export async function generateGeminiReply({
         systemInstruction,
         steps,
         inputMode,
+        styleMode,
         signal: controller.signal,
       });
       if (restReply) {

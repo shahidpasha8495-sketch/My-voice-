@@ -137,6 +137,323 @@ async function fetchWithRetry(
   throw lastError || new Error('Network request failed after retries.');
 }
 
+export interface StreamChatCallbacks {
+  onMeta?: (info: { detectedLanguage: SupportedLanguage }) => void;
+  onToken?: (chunk: string, fullText: string, firstTokenMs: number) => void;
+  onSentenceReady?: (sentence: string, language: SupportedLanguage) => void;
+}
+
+/**
+ * Extracts completed sentences from a streaming buffer so TTS speaks
+ * immediately after Sentence #1 arrives instead of waiting for full generation.
+ */
+function drainCompleteSentences(
+  buffer: string
+): { sentences: string[]; remainder: string } {
+  const sentences: string[] = [];
+  const sentenceBoundaryRegex = /([\s\S]*?[.!?।](?:\s+|$))/u;
+  let working = buffer;
+
+  while (true) {
+    const match = sentenceBoundaryRegex.exec(working);
+    if (!match) break;
+    const candidate = match[1].trim();
+    if (candidate.length >= 6) {
+      sentences.push(candidate);
+      working = working.slice(match[0].length);
+    } else {
+      break;
+    }
+  }
+
+  return { sentences, remainder: working };
+}
+
+export async function sendChatMessageStream(
+  payload: ChatRequestPayload,
+  explicitAccessToken?: string | null,
+  callbacks: StreamChatCallbacks = {}
+): Promise<ChatResponsePayload> {
+  const startPerf = performance.now();
+
+  const validation = validateMessageInput(payload.message);
+  if (!validation.valid) {
+    throw new ChatServiceError(
+      validation.error || 'Invalid message content.',
+      400,
+      'VALIDATION_ERROR'
+    );
+  }
+
+  const token = explicitAccessToken || (await getAccessToken()) || GUEST_ACCESS_TOKEN;
+  const detection = detectMessageLanguage(validation.sanitized, payload.language);
+  const effectiveLang = detection.language;
+  callbacks.onMeta?.({ detectedLanguage: effectiveLang });
+
+  // 1. Unclear/garbled voice audio short-circuit (< 2ms instant clarifying question)
+  const clarifyingReply = getClientClarifyingQuestionForUnclearAudio(
+    validation.sanitized,
+    effectiveLang,
+    payload.inputMode
+  );
+  if (clarifyingReply) {
+    const ms = Math.max(2, Math.round(performance.now() - startPerf));
+    callbacks.onToken?.(clarifyingReply, clarifyingReply, ms);
+    callbacks.onSentenceReady?.(clarifyingReply, effectiveLang);
+    const nowIso = new Date().toISOString();
+    const userMsg: Message = {
+      id: `clarify-u-${Date.now()}`,
+      conversation_id: payload.conversationId,
+      role: 'user',
+      content: validation.sanitized,
+      input_mode: payload.inputMode,
+      language: effectiveLang,
+      created_at: nowIso,
+    };
+    const assistantMsg: Message = {
+      id: `clarify-a-${Date.now() + 1}`,
+      conversation_id: payload.conversationId,
+      role: 'assistant',
+      content: clarifyingReply,
+      input_mode: 'text',
+      language: effectiveLang,
+      created_at: new Date(Date.now() + 1).toISOString(),
+    };
+    if (token === GUEST_ACCESS_TOKEN) {
+      appendGuestMessages(payload.conversationId, [userMsg, assistantMsg]);
+    }
+    return {
+      success: true,
+      userMessage: userMsg,
+      assistantMessage: assistantMsg,
+      detectedLanguage: effectiveLang,
+      firstTokenMs: ms,
+      latencyMs: ms,
+      cached: true,
+    };
+  }
+
+  // 2. Warm Response Cache lookup (< 2ms) with instant sentence delivery
+  const cacheKey = `${payload.characterId || 'cloudy'}::${payload.styleMode || 'turbo'}::${effectiveLang}::${payload.inputMode}::${validation.sanitized.toLowerCase()}`;
+  const cachedEntry = RESPONSE_CACHE.get(cacheKey);
+  if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+    const ms = Math.max(2, Math.round(performance.now() - startPerf));
+    callbacks.onToken?.(cachedEntry.assistantContent, cachedEntry.assistantContent, ms);
+    const { sentences, remainder } = drainCompleteSentences(cachedEntry.assistantContent);
+    sentences.forEach((s) => callbacks.onSentenceReady?.(s, cachedEntry.detectedLanguage));
+    if (remainder.trim()) {
+      callbacks.onSentenceReady?.(remainder.trim(), cachedEntry.detectedLanguage);
+    }
+
+    const nowIso = new Date().toISOString();
+    const cachedUserMsg: Message = {
+      id: `cache-u-${Date.now()}`,
+      conversation_id: payload.conversationId,
+      role: 'user',
+      content: validation.sanitized,
+      input_mode: payload.inputMode,
+      language: effectiveLang,
+      created_at: nowIso,
+    };
+    const cachedAssistantMsg: Message = {
+      id: `cache-a-${Date.now() + 1}`,
+      conversation_id: payload.conversationId,
+      role: 'assistant',
+      content: cachedEntry.assistantContent,
+      input_mode: 'text',
+      language: cachedEntry.detectedLanguage,
+      created_at: new Date(Date.now() + 1).toISOString(),
+    };
+    if (token === GUEST_ACCESS_TOKEN) {
+      appendGuestMessages(payload.conversationId, [
+        cachedUserMsg,
+        cachedAssistantMsg,
+      ]);
+    }
+    return {
+      success: true,
+      userMessage: cachedUserMsg,
+      assistantMessage: cachedAssistantMsg,
+      detectedLanguage: cachedEntry.detectedLanguage,
+      firstTokenMs: ms,
+      latencyMs: ms,
+      cached: true,
+    };
+  }
+
+  // 3. Real-Time SSE Streaming Request to `/api/chat`
+  try {
+    const response = await fetch('/api/chat?stream=1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        Accept: 'text/event-stream, application/json',
+      },
+      body: JSON.stringify({
+        conversationId: payload.conversationId,
+        message: validation.sanitized,
+        language: payload.language,
+        inputMode: payload.inputMode,
+        characterId: payload.characterId,
+        styleMode: payload.styleMode,
+        stream: true,
+        history: payload.history,
+      }),
+    });
+
+    if (response.status === 401) {
+      throw new ChatServiceError(
+        'Your session has expired. Please sign in again.',
+        401,
+        'SESSION_EXPIRED'
+      );
+    }
+
+    if (response.status === 429) {
+      let errMsg = 'Rate limit reached. Please wait a moment and try again.';
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body?.error) errMsg = body.error;
+      } catch {
+        // ignore
+      }
+      throw new ChatServiceError(errMsg, 429, 'RATE_LIMITED');
+    }
+
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+    if (response.ok && contentType.includes('text/event-stream') && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let sseBuffer = '';
+      let currentEvent = 'message';
+      let accumulatedText = '';
+      let sentenceBuffer = '';
+      let firstTokenMs: number | undefined;
+      let detectedLang = effectiveLang;
+      let finalPayload: ChatResponsePayload | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        sseBuffer += decoder.decode(value, { stream: true });
+        let newlineIdx = sseBuffer.indexOf('\n');
+
+        while (newlineIdx !== -1) {
+          const rawLine = sseBuffer.slice(0, newlineIdx);
+          sseBuffer = sseBuffer.slice(newlineIdx + 1);
+          newlineIdx = sseBuffer.indexOf('\n');
+
+          const line = rawLine.trimEnd();
+          if (!line) {
+            currentEvent = 'message';
+            continue;
+          }
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim();
+            continue;
+          }
+          if (!line.startsWith('data:')) continue;
+
+          const jsonText = line.slice(5).trim();
+          if (!jsonText) continue;
+
+          try {
+            const eventData = JSON.parse(jsonText) as Record<string, unknown>;
+            if (currentEvent === 'meta') {
+              const langFromServer = eventData.detectedLanguage as SupportedLanguage | undefined;
+              if (langFromServer) {
+                detectedLang = langFromServer;
+                callbacks.onMeta?.({ detectedLanguage: detectedLang });
+              }
+            } else if (currentEvent === 'delta') {
+              const piece = String(eventData.text || '');
+              if (piece) {
+                if (firstTokenMs === undefined) {
+                  firstTokenMs = Math.max(5, Math.round(performance.now() - startPerf));
+                }
+                accumulatedText += piece;
+                sentenceBuffer += piece;
+                callbacks.onToken?.(piece, accumulatedText, firstTokenMs);
+
+                const drained = drainCompleteSentences(sentenceBuffer);
+                sentenceBuffer = drained.remainder;
+                drained.sentences.forEach((sentence) => {
+                  callbacks.onSentenceReady?.(sentence, detectedLang);
+                });
+              }
+            } else if (currentEvent === 'done') {
+              const userMessage = eventData.userMessage as Message | undefined;
+              const assistantMessage = eventData.assistantMessage as Message | undefined;
+              if (userMessage && assistantMessage) {
+                finalPayload = {
+                  success: true,
+                  userMessage,
+                  assistantMessage,
+                  detectedLanguage:
+                    (eventData.detectedLanguage as SupportedLanguage) || detectedLang,
+                  firstTokenMs:
+                    firstTokenMs ??
+                    (typeof eventData.firstTokenMs === 'number'
+                      ? eventData.firstTokenMs
+                      : Math.max(8, Math.round(performance.now() - startPerf))),
+                  latencyMs: Math.max(10, Math.round(performance.now() - startPerf)),
+                  cached: false,
+                };
+              }
+            }
+          } catch {
+            // Skip malformed SSE event payload
+          }
+        }
+      }
+
+      // Flush any final sentence fragment
+      if (sentenceBuffer.trim()) {
+        callbacks.onSentenceReady?.(sentenceBuffer.trim(), detectedLang);
+      }
+
+      if (finalPayload) {
+        RESPONSE_CACHE.set(cacheKey, {
+          assistantContent: finalPayload.assistantMessage.content,
+          detectedLanguage: finalPayload.detectedLanguage || detectedLang,
+          expiresAt: Date.now() + CACHE_TTL_MS,
+        });
+        if (token === GUEST_ACCESS_TOKEN) {
+          appendGuestMessages(payload.conversationId, [
+            finalPayload.userMessage,
+            finalPayload.assistantMessage,
+          ]);
+        }
+        return finalPayload;
+      }
+    }
+  } catch (err) {
+    if (err instanceof ChatServiceError) {
+      throw err;
+    }
+    // Fall back cleanly to non-streaming / resilient offline mode below
+  }
+
+  // Fallback to non-streaming / resilient local companion response and emit sentence immediately
+  const fallbackResult = await sendChatMessage(payload, explicitAccessToken);
+  const ms =
+    fallbackResult.latencyMs ?? Math.max(5, Math.round(performance.now() - startPerf));
+  callbacks.onToken?.(fallbackResult.assistantMessage.content, fallbackResult.assistantMessage.content, ms);
+  const { sentences, remainder } = drainCompleteSentences(fallbackResult.assistantMessage.content);
+  const outLang = fallbackResult.detectedLanguage || effectiveLang;
+  sentences.forEach((s) => callbacks.onSentenceReady?.(s, outLang));
+  if (remainder.trim()) {
+    callbacks.onSentenceReady?.(remainder.trim(), outLang);
+  }
+  return {
+    ...fallbackResult,
+    firstTokenMs: fallbackResult.firstTokenMs ?? ms,
+  };
+}
+
 export async function sendChatMessage(
   payload: ChatRequestPayload,
   explicitAccessToken?: string | null

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '../../hooks/useTheme';
 
 export interface AppLayoutProps {
@@ -32,14 +32,32 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 }) => {
   const { backgroundPreset } = useTheme();
   const prefersReducedMotion = useReducedMotion();
+  const [pointerPos, setPointerPos] = useState<{ x: number; y: number } | null>(null);
 
   return (
     <div
       style={{ background: backgroundPreset.bgGradient }}
       data-testid="app-layout-root"
       data-bg-theme={backgroundPreset.id}
+      onPointerMove={
+        prefersReducedMotion
+          ? undefined
+          : (e) => {
+              setPointerPos({ x: e.clientX, y: e.clientY });
+            }
+      }
       className="relative flex h-screen w-screen overflow-hidden text-slate-900 dark:text-[#F8FAFC] transition-colors duration-500"
     >
+      {/* Interactive Holographic Pointer Aura */}
+      {!prefersReducedMotion && pointerPos && (
+        <div
+          aria-hidden="true"
+          style={{
+            background: `radial-gradient(380px circle at ${pointerPos.x}px ${pointerPos.y}px, rgba(34, 211, 238, 0.08), transparent 70%)`,
+          }}
+          className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-300"
+        />
+      )}
       {/* Dynamic Animated Blurred Light Orbs */}
       <motion.div
         aria-hidden="true"
