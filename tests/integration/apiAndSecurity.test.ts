@@ -34,6 +34,7 @@ import chatHandler from '../../api/chat';
 import conversationByIdHandler from '../../api/conversations/[id]';
 import conversationsIndexHandler from '../../api/conversations/index';
 import healthHandler from '../../api/health';
+import transcribeHandler from '../../api/voice/transcribe';
 import { ApiError } from '../../api/_lib/http';
 
 function createMockReqRes(options: {
@@ -484,5 +485,139 @@ describe('Integration & Security: Backend API Routes & Database RLS Policies', (
     expect(raw).toContain('Fast ');
     expect(raw).toContain('streaming reply.');
     expect(raw).toContain('event: done');
+  });
+
+  it('POST /api/voice/transcribe rejects unauthenticated calls and invalid audio payloads cleanly', async () => {
+    mockVerifyRequestAuth.mockRejectedValueOnce(
+      new ApiError(401, 'Authentication required.', 'AUTH_REQUIRED')
+    );
+
+    const unauth = createMockReqRes({
+      method: 'POST',
+      url: '/api/voice/transcribe',
+      body: {
+        audioBase64: Buffer.alloc(128, 1).toString('base64'),
+        mimeType: 'audio/webm',
+        language: 'en-US',
+      },
+    });
+    await transcribeHandler(unauth.req, unauth.res);
+    expect(unauth.getStatus()).toBe(401);
+
+    // Invalid MIME type rejected with 400
+    const badMime = createMockReqRes({
+      method: 'POST',
+      url: '/api/voice/transcribe',
+      headers: { authorization: 'Bearer guest-session-token' },
+      body: {
+        audioBase64: Buffer.alloc(128, 1).toString('base64'),
+        mimeType: 'application/pdf',
+        language: 'en-US',
+      },
+    });
+    await transcribeHandler(badMime.req, badMime.res);
+    expect(badMime.getStatus()).toBe(400);
+
+    // Oversized audio (>4 MB decoded) rejected with 413
+    const tooLargeBase64 = Buffer.alloc(4 * 1024 * 1024 + 512, 7).toString(
+      'base64'
+    );
+    const oversized = createMockReqRes({
+      method: 'POST',
+      url: '/api/voice/transcribe',
+      headers: { authorization: 'Bearer guest-session-token' },
+      body: {
+        audioBase64: tooLargeBase64,
+        mimeType: 'audio/mp4',
+        language: 'kn-IN',
+      },
+    });
+    await transcribeHandler(oversized.req, oversized.res);
+    expect(oversized.getStatus()).toBe(413);
+  });
+
+  it('POST /api/voice/transcribe transcribes mobile audio in Kannada, Hindi, and English without exposing secrets', async () => {
+    const sampleAudioBase64 = Buffer.alloc(256, 3).toString('base64');
+
+    mockInteractionsCreate.mockResolvedValueOnce({
+      output_text: 'ಬೆಂಗಳೂರು ಹವಾಮಾನ ಹೇಗಿದೆ?',
+    });
+
+    const knCall = createMockReqRes({
+      method: 'POST',
+      url: '/api/voice/transcribe',
+      headers: { authorization: 'Bearer guest-session-token' },
+      body: {
+        audioBase64: `data:audio/mp4;base64,${sampleAudioBase64}`,
+        mimeType: 'audio/mp4;codecs=mp4a.40.2',
+        language: 'kn-IN',
+      },
+    });
+    await transcribeHandler(knCall.req, knCall.res);
+
+    expect(knCall.getStatus()).toBe(200);
+    const knJson = knCall.getJson();
+    expect(knJson.success).toBe(true);
+    expect(knJson.transcript).toBe('ಬೆಂಗಳೂರು ಹವಾಮಾನ ಹೇಗಿದೆ?');
+    expect(knJson.language).toBe('kn-IN');
+    expect(JSON.stringify(knJson)).not.toContain(
+      'test-server-gemini-key-secret'
+    );
+
+    const createCallArg = mockInteractionsCreate.mock.calls[0]?.[0] as {
+      input?: Array<{ type: string; mime_type?: string }>;
+    };
+    expect(createCallArg?.input?.[0]?.type).toBe('audio');
+    expect(createCallArg?.input?.[0]?.mime_type).toBe('audio/mp4');
+
+    // Hindi audio transcription check
+    mockInteractionsCreate.mockResolvedValueOnce({
+      output_text: 'आज मौसम कैसा है?',
+    });
+    const hiCall = createMockReqRes({
+      method: 'POST',
+      url: '/api/voice/transcribe',
+      headers: { authorization: 'Bearer guest-session-token' },
+      body: {
+        audioBase64: sampleAudioBase64,
+        mimeType: 'audio/webm;codecs=opus',
+        language: 'hi-IN',
+      },
+    });
+    await transcribeHandler(hiCall.req, hiCall.res);
+    expect(hiCall.getStatus()).toBe(200);
+    expect(hiCall.getJson().transcript).toBe('आज मौसम कैसा है?');
+    expect(hiCall.getJson().language).toBe('hi-IN');
+  });
+
+  it('returns an honest upstream error (never a fake canned answer) when Gemini fails', async () => {
+    mockInteractionsCreate.mockRejectedValueOnce(
+      new Error('Upstream Gemini 503 test-server-gemini-key-secret failure')
+    );
+
+    const { req, res, getStatus, getJson } = createMockReqRes({
+      method: 'POST',
+      url: '/api/chat',
+      headers: {
+        authorization: 'Bearer guest-session-token',
+      },
+      body: {
+        conversationId: '550e8400-e29b-41d4-a716-446655440000',
+        message: 'What is quantum entanglement?',
+        language: 'en-US',
+        inputMode: 'text',
+        styleMode: 'detailed',
+        stream: false,
+      },
+    });
+
+    await chatHandler(req, res);
+    expect(getStatus()).toBeGreaterThanOrEqual(400);
+    const json = getJson();
+    expect(json.error).toBeTruthy();
+    expect(json.reply).toBeUndefined();
+    expect(JSON.stringify(json)).not.toContain(
+      'test-server-gemini-key-secret'
+    );
   });
 });

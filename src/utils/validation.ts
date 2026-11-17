@@ -65,6 +65,47 @@ export const chatRequestSchema = z.object({
     .optional(),
 });
 
+export const MAX_AUDIO_DURATION_SECONDS = 45;
+export const MAX_AUDIO_BYTES = 4 * 1024 * 1024; // 4 MB decoded audio limit
+
+export const ALLOWED_AUDIO_MIME_TYPES = [
+  'audio/webm',
+  'audio/mp4',
+  'audio/m4a',
+  'audio/aac',
+  'audio/ogg',
+  'audio/wav',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/flac',
+] as const;
+
+export function normalizeAudioMimeType(rawMime: string): string {
+  return rawMime.split(';')[0].trim().toLowerCase();
+}
+
+export const voiceTranscribeSchema = z.object({
+  audioBase64: z
+    .string()
+    .min(16, 'Recorded audio is empty.')
+    .max(6 * 1024 * 1024, 'Audio recording exceeds maximum upload limit.'),
+  mimeType: z
+    .string()
+    .transform((val) => normalizeAudioMimeType(val))
+    .refine(
+      (val) => (ALLOWED_AUDIO_MIME_TYPES as readonly string[]).includes(val),
+      {
+        message: 'Unsupported audio recording format.',
+      }
+    ),
+  language: supportedLanguageSchema.default('en-US'),
+  durationSeconds: z
+    .number()
+    .min(0.1)
+    .max(MAX_AUDIO_DURATION_SECONDS, `Audio recording cannot exceed ${MAX_AUDIO_DURATION_SECONDS} seconds.`)
+    .optional(),
+});
+
 export const createConversationSchema = z.object({
   title: z
     .string()

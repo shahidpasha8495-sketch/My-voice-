@@ -13,10 +13,13 @@ export const VOICE_STATE_LABELS: Record<VoiceState, string> = {
   requesting_permission: 'Requesting microphone permission…',
   listening: 'Listening… Speak now',
   speech_detected: 'Speech detected… Capturing audio',
+  recording: 'Recording mobile audio… Tap Stop when done',
+  transcribing: 'Transcribing speech with Gemini…',
   processing: 'Processing recognized speech…',
   generating_response: 'Gemini is generating a response…',
   speaking: 'Speaking AI response…',
   paused: 'Speech playback paused',
+  completed: 'Completed',
   error: 'Voice interaction issue',
 };
 

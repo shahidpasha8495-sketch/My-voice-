@@ -5,6 +5,8 @@ import type {
   HealthResponse,
   Message,
   SupportedLanguage,
+  TranscribeRequestPayload,
+  TranscribeResponsePayload,
 } from '../types';
 import { detectMessageLanguage } from '../utils/language';
 import { validateMessageInput } from '../utils/validation';
@@ -31,9 +33,121 @@ interface CachedReplyEntry {
 
 const RESPONSE_CACHE = new Map<string, CachedReplyEntry>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CHAT_REQUEST_TIMEOUT_MS = 25_000;
 
 export function clearChatResponseCache(): void {
   RESPONSE_CACHE.clear();
+}
+
+/**
+ * Prevents context-dependent follow-ups ("explain its advantages", "why?", "give an example",
+ * "translate", etc.) from colliding with cached answers on different topics.
+ */
+export function isContextDependentFollowUp(
+  sanitizedMessage: string,
+  history?: Array<Pick<Message, 'role' | 'content'>>
+): boolean {
+  if (history && history.length > 0) {
+    return true;
+  }
+  const lower = sanitizedMessage.toLowerCase();
+  if (
+    /\b(it|its|this|that|these|those|they|them|their|above|previous|simpler|more|elaborate|continue|repeat|why|how so|example|quiz)\b/i.test(
+      lower
+    )
+  ) {
+    return true;
+  }
+  if (
+    /(इसका|इसके|उसका|उसके|इसे|अधिक|उदाहरण|ಇದರ|ಅದರ|ಇದನ್ನು|ಇನ್ನಷ್ಟು|ಉದಾಹರಣೆ)/.test(
+      sanitizedMessage
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function buildScopedCacheKey(
+  payload: ChatRequestPayload,
+  effectiveLang: SupportedLanguage,
+  sanitizedMessage: string
+): string {
+  const prevTurn = (payload.history || [])
+    .slice(-2)
+    .map((m) => `${m.role}:${m.content.slice(0, 60)}`)
+    .join('|');
+  return `${payload.conversationId}::${payload.characterId || 'cloudy'}::${payload.styleMode || 'turbo'}::${effectiveLang}::${payload.inputMode}::${prevTurn}::${sanitizedMessage.toLowerCase()}`;
+}
+
+export async function transcribeRecordedAudio(
+  payload: TranscribeRequestPayload,
+  explicitAccessToken?: string | null
+): Promise<TranscribeResponsePayload> {
+  const token =
+    explicitAccessToken || (await getAccessToken()) || GUEST_ACCESS_TOKEN;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 22_000);
+
+  try {
+    const response = await fetch('/api/voice/transcribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    let body: Partial<TranscribeResponsePayload> = {};
+    try {
+      body = (await response.json()) as Partial<TranscribeResponsePayload>;
+    } catch {
+      body = {};
+    }
+
+    if (response.status === 401) {
+      throw new ChatServiceError(
+        'Your session has expired. Please sign in again.',
+        401,
+        'SESSION_EXPIRED'
+      );
+    }
+
+    if (!response.ok || !body.success || !body.transcript) {
+      throw new ChatServiceError(
+        body.error ||
+          'Unable to transcribe the recorded audio. Please speak clearly or type your message.',
+        response.status || 500,
+        body.code || 'TRANSCRIPTION_FAILED'
+      );
+    }
+
+    return {
+      success: true,
+      transcript: body.transcript,
+      language: body.language || payload.language,
+      confidence: body.confidence,
+      provider: body.provider,
+    };
+  } catch (err) {
+    if (err instanceof ChatServiceError) {
+      throw err;
+    }
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    throw new ChatServiceError(
+      isAbort
+        ? 'Audio transcription timed out. Please try a shorter recording or type below.'
+        : 'Network error during audio transcription. Please check your connection and try again.',
+      isAbort ? 504 : 503,
+      isAbort ? 'TRANSCRIBE_TIMEOUT' : 'NETWORK_ERROR'
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function getClientClarifyingQuestionForUnclearAudio(
@@ -69,56 +183,23 @@ function getClientClarifyingQuestionForUnclearAudio(
   }
 }
 
-function buildClientFallbackReply(
-  userText: string,
-  lang: SupportedLanguage,
-  characterId = 'cloudy',
-  inputMode: 'text' | 'voice' = 'text'
-): string {
-  const q = userText.trim();
-  const companionName =
-    characterId.charAt(0).toUpperCase() + characterId.slice(1).toLowerCase();
-
-  if (lang === 'kn-IN') {
-    if (/ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ|ai/i.test(q)) {
-      return 'ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆ ಎಂದರೆ ಮನುಷ್ಯರಂತೆ ಯೋಚಿಸಲು ಮತ್ತು ಸಮಸ್ಯೆಗಳನ್ನು ಪರಿಹರಿಸಲು ಕಂಪ್ಯೂಟರ್‌ಗಳಿಗೆ ನೀಡಲಾದ ಸಾಮರ್ಥ್ಯ. ಧ್ವನಿ ಸಹಾಯಕಗಳು ಇದರ ಉತ್ತಮ ಉದಾಹರಣೆಯಾಗಿದೆ.';
-    }
-    return `ನಮಸ್ಕಾರ! ನಾನು ${companionName}. "${q}" ಕುರಿತು ಸ್ಪಷ್ಟ ಉತ್ತರ: ಯಾವುದೇ ವಿಷಯವನ್ನು ಮೂಲ ಪರಿಕಲ್ಪನೆಯಿಂದ ಪ್ರಾರಂಭಿಸಿ ಪ್ರಾಯೋಗಿಕ ಉದಾಹರಣೆಗಳೊಂದಿಗೆ ಅಭ್ಯಾಸ ಮಾಡುವುದರಿಂದ ಸುಲಭವಾಗಿ ಕಲಿಯಬಹುದು.`;
-  }
-
-  if (lang === 'hi-IN') {
-    if (/कृत्रिम बुद्धिमत्ता|ai/i.test(q)) {
-      return 'कृत्रिम बुद्धिमत्ता कंप्यूटर विज्ञान की वह तकनीक है जो मशीनों को इंसानों की तरह समझने और समस्याओं को हल करने में सक्षम बनाती है।';
-    }
-    return `नमस्ते! मैं ${companionName} हूँ। "${q}" को समझने का सबसे अच्छा तरीका इसके मुख्य सिद्धांत को एक छोटे व्यावहारिक उदाहरण के साथ लागू करना है।`;
-  }
-
-  if (inputMode === 'voice') {
-    return `I'm ${companionName}, right here with you. For ${q}, focus on the core concept first and test it with one practical example. Tell me which part you want to dive into next!`;
-  }
-
-  return `Hey there! 👋 I'm **${companionName}**. Here is a clear, direct breakdown for **"${q}"**:\n\n1. **Core Concept**: Focus on the foundational principle first so the bigger picture clicks immediately.\n2. **Practical Step**: Apply it to one small real-world example today.\n3. **Keep Exploring**: Tap any quick-action chip below to simplify further, generate a quiz, or translate into another language! ✨`;
-}
-
 /**
  * Performs fetch with controlled exponential backoff for temporary network or 5xx errors.
- * Never retries permanent 400, 401, 403, or 429 responses.
+ * Never retries permanent 400, 401, 403, 429, or user/timeout-aborted requests.
  */
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
-  maxRetries = 2
+  maxRetries = 1
 ): Promise<Response> {
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
       const response = await fetch(url, options);
-      // Do not retry client errors (400, 401, 403, 429) or successful responses
       if (response.ok || (response.status >= 400 && response.status < 500)) {
         return response;
       }
-      // Retry 502/503/504 transient errors if attempts remain
       if (attempt < maxRetries) {
         const delayMs = 300 * Math.pow(2, attempt);
         await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -126,6 +207,9 @@ async function fetchWithRetry(
       }
       return response;
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw err;
+      }
       lastError = err;
       if (attempt < maxRetries) {
         const delayMs = 300 * Math.pow(2, attempt);
@@ -233,9 +317,17 @@ export async function sendChatMessageStream(
     };
   }
 
-  // 2. Warm Response Cache lookup (< 2ms) with instant sentence delivery
-  const cacheKey = `${payload.characterId || 'cloudy'}::${payload.styleMode || 'turbo'}::${effectiveLang}::${payload.inputMode}::${validation.sanitized.toLowerCase()}`;
-  const cachedEntry = RESPONSE_CACHE.get(cacheKey);
+  // 2. Scoped Response Cache lookup (never reuses answers across different topics/follow-ups)
+  const allowCache = !isContextDependentFollowUp(
+    validation.sanitized,
+    payload.history
+  );
+  const cacheKey = buildScopedCacheKey(
+    payload,
+    effectiveLang,
+    validation.sanitized
+  );
+  const cachedEntry = allowCache ? RESPONSE_CACHE.get(cacheKey) : undefined;
   if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
     const ms = Math.max(2, Math.round(performance.now() - startPerf));
     callbacks.onToken?.(cachedEntry.assistantContent, cachedEntry.assistantContent, ms);
@@ -281,7 +373,10 @@ export async function sendChatMessageStream(
     };
   }
 
-  // 3. Real-Time SSE Streaming Request to `/api/chat`
+  // 3. Real-Time SSE Streaming Request to `/api/chat` with explicit timeout & error propagation
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
+
   try {
     const response = await fetch('/api/chat?stream=1', {
       method: 'POST',
@@ -300,6 +395,7 @@ export async function sendChatMessageStream(
         stream: true,
         history: payload.history,
       }),
+      signal: controller.signal,
     });
 
     if (response.status === 401) {
@@ -307,6 +403,14 @@ export async function sendChatMessageStream(
         'Your session has expired. Please sign in again.',
         401,
         'SESSION_EXPIRED'
+      );
+    }
+
+    if (response.status === 403) {
+      throw new ChatServiceError(
+        'Access denied to this conversation. Please start a new conversation.',
+        403,
+        'FORBIDDEN'
       );
     }
 
@@ -321,9 +425,24 @@ export async function sendChatMessageStream(
       throw new ChatServiceError(errMsg, 429, 'RATE_LIMITED');
     }
 
+    if (!response.ok) {
+      let errBody: { error?: string; code?: string } = {};
+      try {
+        errBody = (await response.json()) as { error?: string; code?: string };
+      } catch {
+        errBody = {};
+      }
+      throw new ChatServiceError(
+        errBody.error ||
+          `Server error (${response.status}). Please retry your message.`,
+        response.status,
+        errBody.code || 'CHAT_SERVER_ERROR'
+      );
+    }
+
     const contentType = (response.headers.get('content-type') || '').toLowerCase();
 
-    if (response.ok && contentType.includes('text/event-stream') && response.body) {
+    if (contentType.includes('text/event-stream') && response.body) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let sseBuffer = '';
@@ -333,6 +452,7 @@ export async function sendChatMessageStream(
       let firstTokenMs: number | undefined;
       let detectedLang = effectiveLang;
       let finalPayload: ChatResponsePayload | null = null;
+      let streamErrorMsg: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -384,6 +504,10 @@ export async function sendChatMessageStream(
                   callbacks.onSentenceReady?.(sentence, detectedLang);
                 });
               }
+            } else if (currentEvent === 'error') {
+              streamErrorMsg =
+                String(eventData.error || '') ||
+                'AI response was interrupted. Please try again.';
             } else if (currentEvent === 'done') {
               const userMessage = eventData.userMessage as Message | undefined;
               const assistantMessage = eventData.assistantMessage as Message | undefined;
@@ -410,17 +534,18 @@ export async function sendChatMessageStream(
         }
       }
 
-      // Flush any final sentence fragment
       if (sentenceBuffer.trim()) {
         callbacks.onSentenceReady?.(sentenceBuffer.trim(), detectedLang);
       }
 
       if (finalPayload) {
-        RESPONSE_CACHE.set(cacheKey, {
-          assistantContent: finalPayload.assistantMessage.content,
-          detectedLanguage: finalPayload.detectedLanguage || detectedLang,
-          expiresAt: Date.now() + CACHE_TTL_MS,
-        });
+        if (allowCache) {
+          RESPONSE_CACHE.set(cacheKey, {
+            assistantContent: finalPayload.assistantMessage.content,
+            detectedLanguage: finalPayload.detectedLanguage || detectedLang,
+            expiresAt: Date.now() + CACHE_TTL_MS,
+          });
+        }
         if (token === GUEST_ACCESS_TOKEN) {
           appendGuestMessages(payload.conversationId, [
             finalPayload.userMessage,
@@ -429,15 +554,63 @@ export async function sendChatMessageStream(
         }
         return finalPayload;
       }
+
+      // If stream broke mid-way AFTER tokens had started arriving, preserve & mark interrupted clearly!
+      if (accumulatedText.trim()) {
+        const nowIso = new Date().toISOString();
+        const partialUser: Message = {
+          id: `partial-u-${Date.now()}`,
+          conversation_id: payload.conversationId,
+          role: 'user',
+          content: validation.sanitized,
+          input_mode: payload.inputMode,
+          language: detectedLang,
+          created_at: nowIso,
+        };
+        const partialAssistant: Message = {
+          id: `partial-a-${Date.now() + 1}`,
+          conversation_id: payload.conversationId,
+          role: 'assistant',
+          content: `${accumulatedText.trim()}\n\n_[Response interrupted before completion — tap Retry if needed.]_`,
+          input_mode: 'text',
+          language: detectedLang,
+          created_at: new Date(Date.now() + 1).toISOString(),
+        };
+        return {
+          success: true,
+          userMessage: partialUser,
+          assistantMessage: partialAssistant,
+          detectedLanguage: detectedLang,
+          firstTokenMs: firstTokenMs ?? Math.max(10, Math.round(performance.now() - startPerf)),
+          latencyMs: Math.max(10, Math.round(performance.now() - startPerf)),
+          cached: false,
+          interrupted: true,
+        };
+      }
+
+      throw new ChatServiceError(
+        streamErrorMsg || 'AI stream ended before returning an answer. Please retry.',
+        502,
+        'STREAM_INTERRUPTED'
+      );
     }
   } catch (err) {
     if (err instanceof ChatServiceError) {
       throw err;
     }
-    // Fall back cleanly to non-streaming / resilient offline mode below
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    throw new ChatServiceError(
+      isAbort
+        ? 'The AI request timed out. Please try again.'
+        : 'Unable to reach MyVoice AI servers. Check your connection and retry.',
+      isAbort ? 504 : 503,
+      isAbort ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR'
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
 
-  // Fallback to non-streaming / resilient local companion response and emit sentence immediately
+  // Fallback to non-streaming JSON /api/chat if server returned non-SSE JSON response
   const fallbackResult = await sendChatMessage(payload, explicitAccessToken);
   const ms =
     fallbackResult.latencyMs ?? Math.max(5, Math.round(performance.now() - startPerf));
@@ -473,7 +646,6 @@ export async function sendChatMessage(
   const detection = detectMessageLanguage(validation.sanitized, payload.language);
   const effectiveLang = detection.language;
 
-  // 1. Unclear/garbled voice audio short-circuit (< 2ms instant clarifying question)
   const clarifyingReply = getClientClarifyingQuestionForUnclearAudio(
     validation.sanitized,
     effectiveLang,
@@ -512,9 +684,16 @@ export async function sendChatMessage(
     };
   }
 
-  // 2. Warm Response Cache lookup for repeated questions (< 5ms)
-  const cacheKey = `${payload.characterId || 'cloudy'}::${effectiveLang}::${payload.inputMode}::${validation.sanitized.toLowerCase()}`;
-  const cachedEntry = RESPONSE_CACHE.get(cacheKey);
+  const allowCache = !isContextDependentFollowUp(
+    validation.sanitized,
+    payload.history
+  );
+  const cacheKey = buildScopedCacheKey(
+    payload,
+    effectiveLang,
+    validation.sanitized
+  );
+  const cachedEntry = allowCache ? RESPONSE_CACHE.get(cacheKey) : undefined;
   if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
     const nowIso = new Date().toISOString();
     const cachedUserMsg: Message = {
@@ -551,7 +730,10 @@ export async function sendChatMessage(
     };
   }
 
-  let response: Response | null = null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
+
+  let response: Response;
   try {
     response = await fetchWithRetry(
       '/api/chat',
@@ -568,109 +750,93 @@ export async function sendChatMessage(
           language: payload.language,
           inputMode: payload.inputMode,
           characterId: payload.characterId,
+          styleMode: payload.styleMode,
           history: payload.history,
         }),
+        signal: controller.signal,
       },
-      2
+      1
     );
-  } catch {
-    response = null;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    throw new ChatServiceError(
+      isAbort
+        ? 'The AI request timed out. Please try again.'
+        : 'Network request failed. Please check your internet connection and retry.',
+      isAbort ? 504 : 503,
+      isAbort ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR'
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
 
-  if (response) {
-    let body: (Partial<ChatResponsePayload> & { error?: string; code?: string }) | null = null;
-    try {
-      body = (await response.json()) as Partial<ChatResponsePayload> & {
-        error?: string;
-        code?: string;
-      };
-    } catch {
-      body = null;
-    }
+  let body: (Partial<ChatResponsePayload> & { error?: string; code?: string }) | null = null;
+  try {
+    body = (await response.json()) as Partial<ChatResponsePayload> & {
+      error?: string;
+      code?: string;
+    };
+  } catch {
+    body = null;
+  }
 
-    if (response.ok && body?.success && body.userMessage && body.assistantMessage) {
-      const detectedLang = body.detectedLanguage || effectiveLang;
+  if (response.ok && body?.success && body.userMessage && body.assistantMessage) {
+    const detectedLang = body.detectedLanguage || effectiveLang;
+    if (allowCache) {
       RESPONSE_CACHE.set(cacheKey, {
         assistantContent: body.assistantMessage.content,
         detectedLanguage: detectedLang,
         expiresAt: Date.now() + CACHE_TTL_MS,
       });
-
-      if (token === GUEST_ACCESS_TOKEN) {
-        appendGuestMessages(payload.conversationId, [
-          body.userMessage,
-          body.assistantMessage,
-        ]);
-      }
-
-      return {
-        success: true,
-        userMessage: body.userMessage,
-        assistantMessage: body.assistantMessage,
-        detectedLanguage: detectedLang,
-        latencyMs: Math.max(10, Math.round(performance.now() - startPerf)),
-        cached: false,
-      };
     }
 
-    // Do not mask permanent authentication or rate-limit errors
-    if (response.status === 401) {
-      throw new ChatServiceError(
-        'Your session has expired. Please sign in again.',
-        401,
-        'SESSION_EXPIRED'
-      );
+    if (token === GUEST_ACCESS_TOKEN) {
+      appendGuestMessages(payload.conversationId, [
+        body.userMessage,
+        body.assistantMessage,
+      ]);
     }
 
-    if (response.status === 429) {
-      throw new ChatServiceError(
-        body?.error || 'Rate limit reached. Please wait a moment and try again.',
-        429,
-        'RATE_LIMITED'
-      );
-    }
+    return {
+      success: true,
+      userMessage: body.userMessage,
+      assistantMessage: body.assistantMessage,
+      detectedLanguage: detectedLang,
+      latencyMs: Math.max(10, Math.round(performance.now() - startPerf)),
+      cached: false,
+    };
   }
 
-  // Resilient Companion Fallback so the user can always continue chatting even if offline
-  const nowIso = new Date().toISOString();
-  const fallbackUserMsg: Message = {
-    id: `local-u-${Date.now()}`,
-    conversation_id: payload.conversationId,
-    role: 'user',
-    content: validation.sanitized,
-    input_mode: payload.inputMode,
-    language: effectiveLang,
-    created_at: nowIso,
-  };
+  if (response.status === 401) {
+    throw new ChatServiceError(
+      'Your session has expired. Please sign in again.',
+      401,
+      'SESSION_EXPIRED'
+    );
+  }
 
-  const fallbackAssistantMsg: Message = {
-    id: `local-a-${Date.now() + 1}`,
-    conversation_id: payload.conversationId,
-    role: 'assistant',
-    content: buildClientFallbackReply(
-      validation.sanitized,
-      effectiveLang,
-      payload.characterId,
-      payload.inputMode
-    ),
-    input_mode: 'text',
-    language: effectiveLang,
-    created_at: new Date(Date.now() + 1).toISOString(),
-  };
+  if (response.status === 403) {
+    throw new ChatServiceError(
+      'Conversation access denied. Please start a new conversation.',
+      403,
+      'FORBIDDEN'
+    );
+  }
 
-  appendGuestMessages(payload.conversationId, [
-    fallbackUserMsg,
-    fallbackAssistantMsg,
-  ]);
+  if (response.status === 429) {
+    throw new ChatServiceError(
+      body?.error || 'Rate limit reached. Please wait a moment and try again.',
+      429,
+      'RATE_LIMITED'
+    );
+  }
 
-  return {
-    success: true,
-    userMessage: fallbackUserMsg,
-    assistantMessage: fallbackAssistantMsg,
-    detectedLanguage: effectiveLang,
-    latencyMs: Math.max(8, Math.round(performance.now() - startPerf)),
-    cached: false,
-  };
+  throw new ChatServiceError(
+    body?.error || 'AI response could not be generated. Please try again.',
+    response.status || 500,
+    body?.code || 'CHAT_ERROR'
+  );
 }
 
 export async function fetchBackendHealth(): Promise<HealthResponse | null> {

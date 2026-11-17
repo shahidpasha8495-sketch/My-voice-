@@ -46,43 +46,69 @@ export function resolveGeminiModel(configuredModel?: string): string {
   return raw;
 }
 
-export const BASE_SYSTEM_INSTRUCTION =
-  "You are MyVoice, a deeply knowledgeable, razor-sharp, friendly, multilingual AI companion. Every animated doll in MyVoice is a domain expert who provides concrete, high-signal, factual answers packed with real mechanisms, named laws/frameworks, accurate numbers or examples, and practical takeaways—never shallow filler, vague clichés, or robotic intros like 'Sure, I can help with that'. Always lead directly with the most valuable insight. Support English, Hindi, Kannada, Tamil, Telugu, Malayalam, Bengali, Spanish, French, German, and Arabic fluently in the user's language or preference. Maintain full multi-turn context across the conversation. Never invent facts or claim external actions you have not performed.";
+export const BASE_SYSTEM_INSTRUCTION = `You are MyVoice, an intelligent, reliable, friendly and multilingual AI conversational assistant.
+
+Your primary responsibility is to understand the user's actual question and provide accurate, relevant, helpful and clearly explained answers.
+
+IMPORTANT RULES:
+1. Understand the complete question before responding.
+2. Answer the exact question the user asked.
+3. Do not change the subject.
+4. Do not invent facts, statistics, sources or information.
+5. Never present guesses as confirmed facts.
+6. If you are uncertain, clearly explain the uncertainty.
+7. If the question is ambiguous, ask a short clarification question.
+8. Use the available conversation context appropriately.
+9. Do not confuse information from different conversations.
+10. Avoid unnecessarily repeating previous answers.
+11. Give direct answers before additional explanations.
+12. Explain difficult concepts using simple language when appropriate.
+13. Provide examples when they genuinely improve understanding.
+14. Correctly interpret English, Hindi and Kannada (and mixed-language inputs across them).
+15. Respond in the user's language or explicitly selected language, preserving native scripts without silently translating unless requested.
+16. Preserve the intended meaning of spoken questions, accounting for minor speech-to-text phrasing slips.
+17. Never claim to have searched the internet or verified something unless an actual search or verification tool was used.
+18. Do not fabricate citations.
+19. If the answer depends on current information that you cannot access, clearly state that limitation.
+20. Keep responses natural and conversational.
+
+You are an assistant, not an unquestionable source of truth.
+Accuracy, relevance, clarity and honesty are more important than sounding confident.`;
 
 const COMPANION_PERSONA_MAP: Record<string, string> = {
   mellow:
-    'Active Companion Persona — Mellow (Cognitive Science & Habit Mentor): You are an expert in cognitive psychology, spaced repetition, the Feynman Technique, dopamine/habit loops, and stress resilience. Anchor answers in named psychological principles, brain mechanisms, and calm, actionable steps.',
+    'Companion Perspective — Mellow: Warm, calm, patient clarity with structured learning tips when helpful (never override accuracy rules).',
   geni:
-    'Active Companion Persona — Geni (PhD-Level STEM, Physics & Mathematics Polymath): You have deep mastery of physics, calculus, linear algebra, quantum mechanics, chemistry, molecular biology, and logic. Explain the true underlying mechanism from first principles using crystal-clear intuition, exact equations/numbers where helpful, and memorable real-world analogies.',
+    'Companion Perspective — Geni: Curious STEM & first-principles clarity with accurate science/math intuition (never override accuracy rules).',
   cloudy:
-    'Active Companion Persona — Cloudy (World History, Philosophy & Rhetoric Scholar): You possess encyclopedic knowledge of world civilizations, political history, classical & Eastern philosophy, literature, and persuasive rhetoric (Ethos/Pathos/Logos). Connect events with clear cause-and-effect, primary thinkers, and timeless human insights.',
+    'Companion Perspective — Cloudy: Peaceful, thoughtful clarity grounded in accurate facts and clean context.',
   bunny:
-    'Active Companion Persona — Bunny (Polyglot Linguistics, Pronunciation & Interview Coach): You are fluent in all 11 supported languages, etymology, phonetic pronunciation tips, idiomatic phrasing, and STAR-method behavioral interview mastery. Give natural phrasing, literal nuance, and encouraging drills.',
+    'Companion Perspective — Bunny: Encouraging language & communication clarity while preserving native scripts accurately.',
   hearty:
-    'Active Companion Persona — Hearty (Product Design, UI/UX Laws & Storytelling Director): You are a master of HCI/UX laws (Hick’s, Fitts’s, Miller’s, Jakob’s), visual hierarchy, color theory, narrative arcs, and brand copywriting. Give crisp creative critiques, structural frameworks, and vivid hooks.',
+    'Companion Perspective — Hearty: Creative, human storytelling and design clarity when the user asks creative questions.',
   nova:
-    'Active Companion Persona — Nova (Principal AI & Full-Stack Systems Architect): You are an expert in LLMs, Transformer attention, distributed systems, databases, TypeScript, React, Python, API latency optimization, and security. Give idiomatic production code patterns, complexity/bottleneck analysis, and concrete architecture trade-offs.',
+    'Companion Perspective — Nova: Crisp technical systems, software engineering, and AI precision.',
   luna:
-    'Active Companion Persona — Luna (Neuroscience, Circadian Health & Astrophysics Guide): You hold deep expertise in human neurobiology, sleep architecture (adenosine/melatonin), evidence-based nutrition, cellular health, and deep-space astrophysics/relativity. Cite real biological pathways and cosmic phenomena accurately.',
+    'Companion Perspective — Luna: Evidence-based biology, neuroscience, health, and cosmos accuracy with gentle clarity.',
   spark:
-    'Active Companion Persona — Spark (Startup Strategy, Unit Economics & Personal Finance Strategist): You specialize in CAC/LTV unit economics, MVP validation, compounding (Rule of 72), behavioral finance, negotiation, and Pareto 80/20 execution. Give sharp quantitative frameworks and immediate action playbooks.',
+    'Companion Perspective — Spark: Practical, energetic problem-solving and crisp action takeaways.',
   atlas:
-    'Active Companion Persona — Atlas (Macroeconomics, Geopolitics & Executive Policy Fellow): You synthesize central banking, monetary policy, Porter’s Five Forces, global supply chains, constitutional/legal reasoning, and executive communication (Minto Pyramid Principle). Deliver structured, authoritative, nuanced analysis.',
+    'Companion Perspective — Atlas: Structured analytical synthesis with objective trade-offs.',
   zen:
-    'Active Companion Persona — Zen (Systems Thinking, Logic & Decision Clarity Sage): You master systems dynamics, feedback loops, second-order thinking, Charlie Munger’s Inversion principle, and cognitive bias detection (Sunk Cost, Confirmation, Availability). Distill complex dilemmas into crystal-clear wisdom.',
+    'Companion Perspective — Zen: Clear systems thinking and concise mental models.',
 };
 
 const STYLE_MODE_MAP: Record<ConversationStyleMode, string> = {
   turbo:
-    'Style Mode — Turbo Instant: Give the fastest, highest-signal answer in crisp 1-2 sentences or ultra-tight bullet points. Zero fluff or preamble.',
+    'Style Preference — Concise Direct: Give the exact answer cleanly in 2-4 crisp, complete sentences unless the user asks for step-by-step detail.',
   tutor:
-    'Style Mode — Smart Tutor: Teach clearly using a quick real-world analogy and one memorable takeaway.',
+    'Style Preference — Smart Tutor: Teach clearly using a concrete everyday analogy and accurate mechanism.',
   brainstorm:
-    'Style Mode — Deep Brainstorm: Offer 2-3 fresh, creative, high-leverage ideas or perspectives immediately.',
+    'Style Preference — Deep Brainstorm: Explore creative, practical options directly tied to the user’s goal.',
   calm:
-    'Style Mode — Calm Check-In: Speak gently, reassuringly, and thoughtfully with grounded clarity.',
+    'Style Preference — Calm Check-In: Respond calmly, clearly, and supportively.',
   coder:
-    'Style Mode — Code Co-Pilot: Give clean, production-ready technical solutions, concise commands, and zero filler.',
+    'Style Preference — Code Co-Pilot: Provide clean, accurate code and technical guidance without fluff.',
 };
 
 export interface BuildSystemInstructionOptions {
@@ -224,9 +250,65 @@ export function buildConversationSteps(
   return steps;
 }
 
+function getMaxOutputTokens(
+  inputMode?: InputMode,
+  _styleMode?: ConversationStyleMode
+): number {
+  // Generous enough so Hindi Devanagari & Kannada Unicode scripts never truncate mid-sentence
+  return inputMode === 'voice' ? 480 : 1200;
+}
+
+function mapGeminiError(err: unknown): ApiError {
+  if (err instanceof ApiError) {
+    return err;
+  }
+
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  const errorName = err instanceof Error ? err.name : '';
+
+  if (errorName === 'AbortError' || /abort|timed?\s*out/i.test(errorMessage)) {
+    return new ApiError(
+      504,
+      'The AI request timed out. Please try again.',
+      'GEMINI_TIMEOUT'
+    );
+  }
+
+  if (/401|403|api[_\s-]?key|permission|unauthenticated/i.test(errorMessage)) {
+    return new ApiError(
+      502,
+      'AI service authentication failed. Please check GEMINI_API_KEY on the server.',
+      'GEMINI_AUTH_ERROR'
+    );
+  }
+
+  if (/429|quota|rate[_\s-]?limit|resource[_\s-]?exhausted/i.test(errorMessage)) {
+    return new ApiError(
+      429,
+      'AI rate limit reached. Please wait a moment and try again.',
+      'GEMINI_RATE_LIMIT'
+    );
+  }
+
+  if (/404|not\s*found|model.*unavailable|503|overloaded/i.test(errorMessage)) {
+    return new ApiError(
+      503,
+      'The AI model is temporarily unavailable. Please try again shortly.',
+      'GEMINI_MODEL_UNAVAILABLE'
+    );
+  }
+
+  return new ApiError(
+    502,
+    'AI response could not be generated. Please try again.',
+    'GEMINI_ERROR'
+  );
+}
+
 /**
  * Secondary direct REST fallback against standard Google AI Studio generateContent models
- * (gemini-2.5-flash-lite, gemini-2.5-flash, gemini-2.0-flash) if the Interactions endpoint is not enabled for the key.
+ * (gemini-2.5-flash, gemini-2.5-flash-lite, gemini-2.0-flash) if the Interactions endpoint
+ * is unavailable for the configured API key.
  */
 async function tryStandardGeminiRestApi(params: {
   apiKey: string;
@@ -235,15 +317,17 @@ async function tryStandardGeminiRestApi(params: {
   inputMode?: InputMode;
   styleMode?: ConversationStyleMode;
   signal: AbortSignal;
-}): Promise<string | null> {
+}): Promise<{ text: string | null; lastStatus?: number }> {
   const { apiKey, systemInstruction, steps, inputMode, styleMode, signal } = params;
-  const candidateModels = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
-  const maxOutputTokens = inputMode === 'voice' || styleMode === 'turbo' ? 160 : 750;
+  const candidateModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+  const maxOutputTokens = getMaxOutputTokens(inputMode, styleMode);
 
   const contents = steps.map((step) => ({
     role: step.type === 'model_output' ? 'model' : 'user',
     parts: step.content.map((c) => ({ text: c.text })),
   }));
+
+  let lastStatus: number | undefined;
 
   for (const modelName of candidateModels) {
     try {
@@ -257,7 +341,8 @@ async function tryStandardGeminiRestApi(params: {
           },
           contents,
           generationConfig: {
-            temperature: 0.65,
+            temperature: 0.45,
+            topP: 0.9,
             maxOutputTokens,
             thinkingConfig: modelName.startsWith('gemini-2.5')
               ? { thinkingBudget: 0 }
@@ -267,6 +352,7 @@ async function tryStandardGeminiRestApi(params: {
         signal,
       });
 
+      lastStatus = response.status;
       if (!response.ok) continue;
 
       const data = (await response.json()) as {
@@ -280,19 +366,19 @@ async function tryStandardGeminiRestApi(params: {
         .trim();
 
       if (text) {
-        return text;
+        return { text, lastStatus };
       }
     } catch {
       // Try next candidate model
     }
   }
 
-  return null;
+  return { text: null, lastStatus };
 }
 
 /**
  * True token-by-token SSE streaming fallback using standard Google AI Studio
- * `:streamGenerateContent?alt=sse` on ultra-fast flash-lite / flash models.
+ * `:streamGenerateContent?alt=sse` on gemini-2.5-flash / flash-lite models.
  */
 async function* streamStandardGeminiRestApi(params: {
   apiKey: string;
@@ -301,15 +387,17 @@ async function* streamStandardGeminiRestApi(params: {
   inputMode?: InputMode;
   styleMode?: ConversationStyleMode;
   signal: AbortSignal;
-}): AsyncGenerator<string, boolean, void> {
+}): AsyncGenerator<string, { ok: boolean; lastStatus?: number }, void> {
   const { apiKey, systemInstruction, steps, inputMode, styleMode, signal } = params;
-  const candidateModels = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
-  const maxOutputTokens = inputMode === 'voice' || styleMode === 'turbo' ? 160 : 750;
+  const candidateModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+  const maxOutputTokens = getMaxOutputTokens(inputMode, styleMode);
 
   const contents = steps.map((step) => ({
     role: step.type === 'model_output' ? 'model' : 'user',
     parts: step.content.map((c) => ({ text: c.text })),
   }));
+
+  let lastStatus: number | undefined;
 
   for (const modelName of candidateModels) {
     try {
@@ -323,7 +411,8 @@ async function* streamStandardGeminiRestApi(params: {
           },
           contents,
           generationConfig: {
-            temperature: 0.65,
+            temperature: 0.45,
+            topP: 0.9,
             maxOutputTokens,
             thinkingConfig: modelName.startsWith('gemini-2.5')
               ? { thinkingBudget: 0 }
@@ -333,6 +422,7 @@ async function* streamStandardGeminiRestApi(params: {
         signal,
       });
 
+      lastStatus = response.status;
       if (!response.ok || !response.body) continue;
 
       const reader = response.body.getReader();
@@ -376,14 +466,14 @@ async function* streamStandardGeminiRestApi(params: {
       }
 
       if (emittedAny) {
-        return true;
+        return { ok: true, lastStatus };
       }
     } catch {
       // Try next fast model
     }
   }
 
-  return false;
+  return { ok: false, lastStatus };
 }
 
 /**
@@ -540,9 +630,9 @@ export async function* generateGeminiReplyStream({
   characterId,
   inputMode,
   styleMode,
-  timeoutMs = 20_000,
+  timeoutMs = 25_000,
 }: GenerateGeminiReplyParams): AsyncGenerator<string, void, void> {
-  // 1. Instant unclear-audio clarification (< 1ms)
+  // 1. Instant unclear-audio clarification
   const clarification = getClarifyingQuestionForUnclearAudio(
     currentMessage,
     language,
@@ -554,28 +644,12 @@ export async function* generateGeminiReplyStream({
   }
 
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
-  const isVitest = Boolean(process.env.VITEST);
-
   if (!apiKey) {
-    if (isVitest) {
-      throw new ApiError(
-        503,
-        'AI response could not be generated because the server Gemini API key is not configured.',
-        'GEMINI_NOT_CONFIGURED'
-      );
-    }
-    const fallbackText = generateResilientCompanionReply({
-      currentMessage,
-      language,
-      characterId,
-      historyMessages,
-    });
-    const tokens = fallbackText.split(/(\s+)/);
-    for (let i = 0; i < tokens.length; i += 3) {
-      yield tokens.slice(i, i + 3).join('');
-      await new Promise((r) => setTimeout(r, 8));
-    }
-    return;
+    throw new ApiError(
+      503,
+      'AI response could not be generated because the server Gemini API key is not configured.',
+      'GEMINI_NOT_CONFIGURED'
+    );
   }
 
   const model = resolveGeminiModel(process.env.GEMINI_MODEL);
@@ -585,12 +659,13 @@ export async function* generateGeminiReplyStream({
     styleMode,
   });
   const steps = buildConversationSteps(historyMessages, currentMessage, CONTEXT_WINDOW_LIMIT);
-  const maxOutputTokens = inputMode === 'voice' || styleMode === 'turbo' ? 160 : 750;
+  const maxOutputTokens = getMaxOutputTokens(inputMode, styleMode);
   const client = getGeminiClient(apiKey);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   let streamedAny = false;
+  let primaryError: unknown = null;
 
   try {
     const stream = await client.interactions.create(
@@ -624,10 +699,11 @@ export async function* generateGeminiReplyStream({
       clearTimeout(timeoutId);
       return;
     }
-  } catch {
-    // Fall through cleanly to direct REST SSE stream
+  } catch (err) {
+    primaryError = err;
   }
 
+  const isVitest = Boolean(process.env.VITEST);
   if (!streamedAny && !isVitest) {
     try {
       const restGenerator = streamStandardGeminiRestApi({
@@ -639,16 +715,42 @@ export async function* generateGeminiReplyStream({
         signal: controller.signal,
       });
 
-      for await (const piece of restGenerator) {
+      let restOutcome: { ok: boolean; lastStatus?: number } = { ok: false };
+      while (true) {
+        const next = await restGenerator.next();
+        if (next.done) {
+          restOutcome = next.value || { ok: false };
+          break;
+        }
         streamedAny = true;
-        yield piece;
+        yield next.value;
       }
 
-      if (streamedAny) {
+      if (streamedAny || restOutcome.ok) {
+        clearTimeout(timeoutId);
         return;
       }
-    } catch {
-      // Fall through to resilient local fast stream
+
+      if (restOutcome.lastStatus === 401 || restOutcome.lastStatus === 403) {
+        throw new ApiError(
+          502,
+          'AI service authentication failed. Please check GEMINI_API_KEY on the server.',
+          'GEMINI_AUTH_ERROR'
+        );
+      }
+      if (restOutcome.lastStatus === 429) {
+        throw new ApiError(
+          429,
+          'AI rate limit reached. Please wait a moment and try again.',
+          'GEMINI_RATE_LIMIT'
+        );
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        clearTimeout(timeoutId);
+        throw err;
+      }
+      primaryError = primaryError || err;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -657,24 +759,7 @@ export async function* generateGeminiReplyStream({
   }
 
   if (!streamedAny) {
-    if (isVitest) {
-      throw new ApiError(
-        502,
-        'AI response could not be generated. Please try again.',
-        'GEMINI_ERROR'
-      );
-    }
-    const fallbackText = generateResilientCompanionReply({
-      currentMessage,
-      language,
-      characterId,
-      historyMessages,
-    });
-    const tokens = fallbackText.split(/(\s+)/);
-    for (let i = 0; i < tokens.length; i += 3) {
-      yield tokens.slice(i, i + 3).join('');
-      await new Promise((r) => setTimeout(r, 8));
-    }
+    throw mapGeminiError(primaryError || new Error('Empty AI stream'));
   }
 }
 
@@ -685,7 +770,7 @@ export async function generateGeminiReply({
   characterId,
   inputMode,
   styleMode,
-  timeoutMs = 20_000,
+  timeoutMs = 25_000,
 }: GenerateGeminiReplyParams): Promise<string> {
   // Handle unclear or garbled voice audio immediately with a friendly clarifying question
   const clarification = getClarifyingQuestionForUnclearAudio(
@@ -701,19 +786,11 @@ export async function generateGeminiReply({
   const isVitest = Boolean(process.env.VITEST);
 
   if (!apiKey) {
-    if (isVitest) {
-      throw new ApiError(
-        503,
-        'AI response could not be generated because the server Gemini API key is not configured.',
-        'GEMINI_NOT_CONFIGURED'
-      );
-    }
-    return generateResilientCompanionReply({
-      currentMessage,
-      language,
-      characterId,
-      historyMessages,
-    });
+    throw new ApiError(
+      503,
+      'AI response could not be generated because the server Gemini API key is not configured.',
+      'GEMINI_NOT_CONFIGURED'
+    );
   }
 
   const model = resolveGeminiModel(process.env.GEMINI_MODEL);
@@ -725,7 +802,7 @@ export async function generateGeminiReply({
   const steps = buildConversationSteps(historyMessages, currentMessage, CONTEXT_WINDOW_LIMIT);
 
   const client = getGeminiClient(apiKey);
-  const maxOutputTokens = inputMode === 'voice' || styleMode === 'turbo' ? 160 : 750;
+  const maxOutputTokens = getMaxOutputTokens(inputMode, styleMode);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -781,10 +858,9 @@ export async function generateGeminiReply({
 
     return outputText;
   } catch (err: unknown) {
-    // In production/dev runtime (outside unit tests), try standard Gemini generateContent REST API
-    // and then resilient local intelligence so the user NEVER sees "Unable to connect. Please try again."
+    // Outside unit tests, try Google AI Studio generateContent REST models cleanly
     if (!isVitest) {
-      const restReply = await tryStandardGeminiRestApi({
+      const restResult = await tryStandardGeminiRestApi({
         apiKey,
         systemInstruction,
         steps,
@@ -792,61 +868,228 @@ export async function generateGeminiReply({
         styleMode,
         signal: controller.signal,
       });
-      if (restReply) {
-        return restReply;
+      if (restResult.text) {
+        return restResult.text;
+      }
+      if (restResult.lastStatus === 401 || restResult.lastStatus === 403) {
+        throw new ApiError(
+          502,
+          'AI service authentication failed. Please check GEMINI_API_KEY on the server.',
+          'GEMINI_AUTH_ERROR'
+        );
+      }
+      if (restResult.lastStatus === 429) {
+        throw new ApiError(
+          429,
+          'AI rate limit reached. Please wait a moment and try again.',
+          'GEMINI_RATE_LIMIT'
+        );
+      }
+    }
+
+    throw mapGeminiError(err);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export interface TranscribeAudioParams {
+  audioBase64: string;
+  mimeType: string;
+  language: SupportedLanguage;
+  timeoutMs?: number;
+}
+
+/**
+ * Transcribes mobile/browser-recorded audio (WebM, MP4/M4A, WAV, OGG, AAC)
+ * using Gemini's native multimodal audio understanding, preserving native scripts
+ * for Kannada, Hindi, English, and mixed-language speech without translation.
+ */
+export async function transcribeAudioWithGemini({
+  audioBase64,
+  mimeType,
+  language,
+  timeoutMs = 20_000,
+}: TranscribeAudioParams): Promise<{ transcript: string; provider: string }> {
+  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+  if (!apiKey) {
+    throw new ApiError(
+      503,
+      'Speech transcription is unavailable because GEMINI_API_KEY is not configured on the server.',
+      'GEMINI_NOT_CONFIGURED'
+    );
+  }
+
+  const cleanMime = mimeType.split(';')[0].trim().toLowerCase() || 'audio/webm';
+  const model = resolveGeminiModel(process.env.GEMINI_MODEL);
+  const client = getGeminiClient(apiKey);
+
+  const languageHintMap: Partial<Record<SupportedLanguage, string>> = {
+    'kn-IN':
+      'The speaker is likely speaking Kannada (ಕನ್ನಡ), or mixed Kannada and English. Preserve Kannada words accurately in native Kannada script (ಕನ್ನಡ ಲಿಪಿ).',
+    'hi-IN':
+      'The speaker is likely speaking Hindi (हिन्दी), or mixed Hindi and English. Preserve Hindi words accurately in native Devanagari script (देवनागरी लिपि).',
+    'en-US':
+      'The speaker is speaking English (en-US).',
+  };
+
+  const transcriptionPrompt = `Transcribe the spoken speech in this audio verbatim and accurately.
+${languageHintMap[language] || `Preferred language hint: ${language}.`}
+STRICT RULES:
+- Output ONLY the exact transcribed words spoken in the audio.
+- Do NOT translate Hindi or Kannada into English. Preserve the original language and native script.
+- If the speaker mixes languages (e.g. English + Kannada or Hindi), preserve each word in its natural script.
+- Do NOT answer the question. Do NOT add labels, timestamps, quotes, or explanations.
+- If the audio contains only silence or unintelligible background noise with no clear words, return exactly: [UNCLEAR_AUDIO]`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    // 1. Try configured GEMINI_MODEL via Interactions API multimodal AudioContent
+    try {
+      const interaction = await client.interactions.create(
+        {
+          model,
+          input: [
+            {
+              type: 'audio',
+              data: audioBase64,
+              mime_type: cleanMime as 'audio/webm' | 'audio/mp4',
+            },
+            {
+              type: 'text',
+              text: transcriptionPrompt,
+            },
+          ],
+          generation_config: {
+            thinking_level: 'minimal',
+            max_output_tokens: 450,
+          },
+          store: false,
+        },
+        { signal: controller.signal }
+      );
+
+      let text = interaction.output_text?.trim() ?? '';
+      if (!text && Array.isArray(interaction.steps)) {
+        const parts: string[] = [];
+        for (const step of interaction.steps) {
+          if (step.type === 'model_output' && Array.isArray(step.content)) {
+            for (const item of step.content) {
+              if (item.type === 'text' && typeof item.text === 'string') {
+                parts.push(item.text);
+              }
+            }
+          }
+        }
+        text = parts.join(' ').trim();
       }
 
-      return generateResilientCompanionReply({
-        currentMessage,
-        language,
-        characterId,
-        historyMessages,
-      });
+      if (text) {
+        if (text === '[UNCLEAR_AUDIO]') {
+          throw new ApiError(
+            422,
+            'No clear speech could be heard in your recording. Please try speaking closer to the microphone.',
+            'EMPTY_TRANSCRIPTION'
+          );
+        }
+        return { transcript: text, provider: model };
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'EMPTY_TRANSCRIPTION') {
+        throw err;
+      }
+      // Fall through cleanly to Google AI Studio multimodal audio-capable models
     }
 
-    if (err instanceof ApiError) {
-      throw err;
+    const isVitest = Boolean(process.env.VITEST);
+
+    // 2. Outside unit tests, fall back to Google AI Studio multimodal audio-capable models
+    let lastStatus: number | undefined;
+
+    if (!isVitest) {
+      const audioModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+
+      for (const modelName of audioModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: cleanMime,
+                      data: audioBase64,
+                    },
+                  },
+                  {
+                    text: transcriptionPrompt,
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 450,
+            },
+          }),
+          signal: controller.signal,
+        });
+
+        lastStatus = response.status;
+        if (!response.ok) continue;
+
+        const data = (await response.json()) as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+          }>;
+        };
+        const text = data.candidates?.[0]?.content?.parts
+          ?.map((p) => p.text || '')
+          .join(' ')
+          .trim();
+
+        if (text) {
+          if (text === '[UNCLEAR_AUDIO]') {
+            throw new ApiError(
+              422,
+              'No clear speech could be heard in your recording. Please try speaking closer to the microphone.',
+              'EMPTY_TRANSCRIPTION'
+            );
+          }
+          return { transcript: text, provider: modelName };
+        }
+        } catch (innerErr) {
+          if (innerErr instanceof ApiError) throw innerErr;
+        }
+      }
     }
 
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const errorName = err instanceof Error ? err.name : '';
-
-    if (errorName === 'AbortError' || /abort|timed?\s*out/i.test(errorMessage)) {
-      throw new ApiError(
-        504,
-        'The AI request timed out. Please try again.',
-        'GEMINI_TIMEOUT'
-      );
-    }
-
-    if (/401|403|api[_\s-]?key|permission|unauthenticated/i.test(errorMessage)) {
+    if (lastStatus === 401 || lastStatus === 403) {
       throw new ApiError(
         502,
-        'AI service authentication failed. Please check the server configuration.',
+        'Audio transcription authentication failed. Please check GEMINI_API_KEY on the server.',
         'GEMINI_AUTH_ERROR'
       );
     }
-
-    if (/429|quota|rate[_\s-]?limit|resource[_\s-]?exhausted/i.test(errorMessage)) {
+    if (lastStatus === 429) {
       throw new ApiError(
         429,
-        'AI rate limit reached. Please wait a moment and try again.',
+        'Rate limit reached during audio transcription. Please wait a moment and try again.',
         'GEMINI_RATE_LIMIT'
-      );
-    }
-
-    if (/404|not\s*found|model.*unavailable|503|overloaded/i.test(errorMessage)) {
-      throw new ApiError(
-        503,
-        'The AI model is temporarily unavailable. Please try again shortly.',
-        'GEMINI_MODEL_UNAVAILABLE'
       );
     }
 
     throw new ApiError(
       502,
-      'AI response could not be generated. Please try again.',
-      'GEMINI_ERROR'
+      'Could not transcribe the audio recording. Please try speaking clearly or use the text box.',
+      'TRANSCRIPTION_FAILED'
     );
   } finally {
     clearTimeout(timeoutId);

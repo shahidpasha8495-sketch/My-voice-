@@ -33,10 +33,13 @@ const COMPANION_VOICE_PROMPT: Record<VoiceState, string> = {
   requesting_permission: 'Requesting mic access...',
   listening: "I'm listening...",
   speech_detected: "I'm listening...",
+  recording: 'Recording audio...',
+  transcribing: 'Transcribing audio...',
   processing: 'Thinking...',
   generating_response: 'Thinking...',
   speaking: 'Talking to you...',
   paused: 'Speech paused',
+  completed: 'Completed',
   error: "Let's try that again.",
 };
 

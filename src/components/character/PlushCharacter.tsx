@@ -63,9 +63,11 @@ export const PlushCharacter: React.FC<PlushCharacterProps> = ({
     expression === 'listening' ||
     voiceState === 'listening' ||
     voiceState === 'speech_detected' ||
+    voiceState === 'recording' ||
     voiceState === 'requesting_permission';
   const isThinking =
     expression === 'thinking' ||
+    voiceState === 'transcribing' ||
     voiceState === 'processing' ||
     voiceState === 'generating_response';
   const isSpeaking = expression === 'speaking' || voiceState === 'speaking';

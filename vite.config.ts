@@ -6,6 +6,7 @@ import chatHandler from './api/chat';
 import conversationByIdHandler from './api/conversations/[id]';
 import conversationsIndexHandler from './api/conversations/index';
 import healthHandler from './api/health';
+import voiceTranscribeHandler from './api/voice/transcribe';
 import type { VercelRequest, VercelResponse } from './api/_lib/http';
 
 function vercelApiLocalPlugin(): Plugin {
@@ -35,6 +36,10 @@ function vercelApiLocalPlugin(): Plugin {
         }
         if (pathname === '/api/chat') {
           await chatHandler(vercelReq, vercelRes);
+          return;
+        }
+        if (pathname === '/api/voice/transcribe') {
+          await voiceTranscribeHandler(vercelReq, vercelRes);
           return;
         }
         if (pathname === '/api/conversations' || pathname === '/api/conversations/') {

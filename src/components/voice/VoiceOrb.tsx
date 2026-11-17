@@ -25,10 +25,13 @@ export const FRIENDLY_VOICE_PROMPTS: Record<VoiceState, string> = {
   requesting_permission: 'Requesting microphone...',
   listening: "I'm listening...",
   speech_detected: "I'm listening...",
+  recording: 'Recording audio...',
+  transcribing: 'Transcribing audio...',
   processing: 'Thinking...',
   generating_response: 'Thinking...',
   speaking: 'Talking to you...',
   paused: 'Paused',
+  completed: 'Completed',
   error: "Let's try that again.",
 };
 
@@ -57,9 +60,11 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
 
   const { amplitude, bands } = useAudioAnalyzer(state);
 
-  const isListening = state === 'listening' || state === 'speech_detected';
+  const isListening =
+    state === 'listening' || state === 'speech_detected' || state === 'recording';
   const isProcessing =
     state === 'requesting_permission' ||
+    state === 'transcribing' ||
     state === 'processing' ||
     state === 'generating_response';
   const isSpeaking = state === 'speaking';

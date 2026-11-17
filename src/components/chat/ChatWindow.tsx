@@ -3,13 +3,17 @@ import {
   AlertCircle,
   Brain,
   CalendarClock,
+  Check,
   CloudSun,
   Gauge,
   GraduationCap,
   Loader2,
+  Mic,
   PhoneCall,
   Radio,
   RefreshCw,
+  RotateCcw,
+  Send,
   SlidersHorizontal,
   Sparkles,
   X,
@@ -22,6 +26,8 @@ import {
   getDailyGreeting,
   type PlushCharacterId,
 } from '../../config/characters';
+import type { FailedMessageDraft } from '../../hooks/useChat';
+import type { PendingTranscriptDraft } from '../../hooks/useSpeechRecognition';
 import type {
   ConversationStyleMode,
   Message,
@@ -51,14 +57,22 @@ export interface ChatWindowProps {
   streamingMessageId?: string | null;
   chatError: string | null;
   voiceError: string | null;
+  failedDraft?: FailedMessageDraft | null;
+  onRetryFailedMessage?: () => void;
   isRecognitionSupported: boolean;
   isSynthesisSupported: boolean;
   isListening: boolean;
+  isRecording?: boolean;
+  isTranscribing?: boolean;
+  recordingSeconds?: number;
+  isMediaRecorderAvailable?: boolean;
   isPushToTalk?: boolean;
   isSpeaking: boolean;
   isPaused: boolean;
   isMuted?: boolean;
   volume?: number;
+  reviewBeforeSend?: boolean;
+  pendingTranscript?: PendingTranscriptDraft | null;
   activeSpeakingMessageId: string | null;
   hasReplayableResponse: boolean;
   selectedCharacterId?: PlushCharacterId;
@@ -78,12 +92,18 @@ export interface ChatWindowProps {
   onRetryConnection?: () => void;
   onToggleMute?: () => void;
   onVolumeChange?: (volume: number) => void;
+  onToggleReviewBeforeSend?: () => void;
+  onChangePendingTranscript?: (text: string) => void;
+  onConfirmPendingTranscript?: () => void;
+  onDiscardPendingTranscript?: () => void;
   onSelectCharacter?: (id: PlushCharacterId) => void;
   onOpenVoiceStudio?: () => void;
   onOpenCharacterGallery?: () => void;
   onSelectSuggestedPrompt: (prompt: string) => void;
   onStartListening: () => void;
   onStopListening: () => void;
+  onStartMediaRecording?: () => void;
+  onStopMediaRecording?: () => void;
   onStartPushToTalk?: () => void;
   onStopPushToTalk?: () => void;
   onCancelListening: () => void;
@@ -107,14 +127,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   streamingMessageId = null,
   chatError,
   voiceError,
+  failedDraft = null,
+  onRetryFailedMessage,
   isRecognitionSupported,
   isSynthesisSupported,
   isListening,
+  isRecording = false,
+  isTranscribing = false,
+  recordingSeconds = 0,
+  isMediaRecorderAvailable = false,
   isPushToTalk = false,
   isSpeaking,
   isPaused,
   isMuted = false,
   volume = 1,
+  reviewBeforeSend = false,
+  pendingTranscript = null,
   activeSpeakingMessageId,
   hasReplayableResponse,
   selectedCharacterId = 'mellow',
@@ -134,12 +162,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onRetryConnection,
   onToggleMute,
   onVolumeChange,
+  onToggleReviewBeforeSend,
+  onChangePendingTranscript,
+  onConfirmPendingTranscript,
+  onDiscardPendingTranscript,
   onSelectCharacter,
   onOpenVoiceStudio,
   onOpenCharacterGallery,
   onSelectSuggestedPrompt,
   onStartListening,
   onStopListening,
+  onStartMediaRecording,
+  onStopMediaRecording,
   onStartPushToTalk,
   onStopPushToTalk,
   onCancelListening,
@@ -170,7 +204,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [messages.length, isSending, liveTranscriptPreview]);
 
   const handleOrbToggle = () => {
-    if (isListening) {
+    if (isRecording && onStopMediaRecording) {
+      onStopMediaRecording();
+    } else if (isListening) {
       onStopListening();
     } else if (isSpeaking) {
       onStopSpeaking();
@@ -186,24 +222,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         {(chatError || voiceError) && (
           <div className="flex flex-col gap-2" role="alert">
             {chatError && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#F87171]/40 bg-[#F87171]/10 px-4 py-3 text-xs sm:text-sm text-[#EF4444] dark:text-[#F87171]">
-                <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#F87171]/40 bg-[#F87171]/10 px-4 py-3 text-xs sm:text-sm text-[#EF4444] dark:text-[#F87171]">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{chatError}</span>
+                  <div className="min-w-0">
+                    <span>{chatError}</span>
+                    {failedDraft && (
+                      <p className="mt-1 truncate text-[11px] opacity-80">
+                        Draft preserved: &ldquo;{failedDraft.content}&rdquo;
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {onRetryConnection && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {failedDraft && onRetryFailedMessage ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        onDismissChatError();
-                        onRetryConnection();
-                      }}
-                      className="inline-flex items-center gap-1 rounded-xl border border-[#F87171]/40 bg-[#F87171]/20 px-2.5 py-1 text-xs font-bold hover:bg-[#F87171]/30 transition-colors"
+                      onClick={() => onRetryFailedMessage()}
+                      data-testid="retry-failed-message-button"
+                      className="touch-manipulation inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-[#F87171]/40 bg-[#F87171]/20 px-3 py-1 text-xs font-bold hover:bg-[#F87171]/30 transition-colors"
                     >
-                      <RefreshCw className="h-3 w-3" />
-                      <span>Retry Connection</span>
+                      <RotateCcw className="h-3 w-3" />
+                      <span>Retry Message</span>
                     </button>
+                  ) : (
+                    onRetryConnection && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onDismissChatError();
+                          onRetryConnection();
+                        }}
+                        className="touch-manipulation inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-[#F87171]/40 bg-[#F87171]/20 px-2.5 py-1 text-xs font-bold hover:bg-[#F87171]/30 transition-colors"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        <span>Retry Connection</span>
+                      </button>
+                    )
                   )}
                   <button
                     type="button"
@@ -218,21 +273,117 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             )}
 
             {voiceError && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#F87171]/40 bg-[#F87171]/10 px-4 py-3 text-xs sm:text-sm text-[#EF4444] dark:text-[#F87171]">
-                <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#F87171]/40 bg-[#F87171]/10 px-4 py-3 text-xs sm:text-sm text-[#EF4444] dark:text-[#F87171]">
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{voiceError}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={onDismissVoiceError}
-                  aria-label="Dismiss voice error"
-                  className="rounded-lg p-1 hover:bg-[#F87171]/20 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDismissVoiceError();
+                      onStartListening();
+                    }}
+                    data-testid="retry-voice-button"
+                    className="touch-manipulation inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-[#F87171]/40 bg-[#F87171]/20 px-2.5 py-1 text-xs font-bold hover:bg-[#F87171]/30 transition-colors"
+                  >
+                    <Mic className="h-3 w-3" />
+                    <span>Retry Mic</span>
+                  </button>
+                  {isMediaRecorderAvailable && onStartMediaRecording && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDismissVoiceError();
+                        onStartMediaRecording();
+                      }}
+                      data-testid="fallback-record-audio-button"
+                      className="touch-manipulation inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-[#22D3EE]/50 bg-[#22D3EE]/15 px-2.5 py-1 text-xs font-bold text-[#0284C7] dark:text-[#22D3EE] hover:bg-[#22D3EE]/25 transition-colors"
+                    >
+                      <Radio className="h-3 w-3" />
+                      <span>Record Audio</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onDismissVoiceError}
+                    aria-label="Dismiss voice error"
+                    className="rounded-lg p-1 hover:bg-[#F87171]/20 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Mobile / Low-Confidence Transcript Verification & Edit Card */}
+        {pendingTranscript && (
+          <div
+            data-testid="pending-transcript-card"
+            className="rounded-2xl border border-[#22D3EE]/45 bg-white/95 dark:bg-[#191B30]/95 p-4 shadow-glow-secondary backdrop-blur-xl"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4 text-[#22D3EE]" />
+                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-[#F8FAFC]">
+                  Verify &amp; Edit Spoken Transcript
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] font-semibold">
+                <span className="rounded-full bg-[#8B5CF6]/15 px-2.5 py-0.5 text-[#7C3AED] dark:text-[#C4B5FD]">
+                  {pendingTranscript.source === 'gemini-audio'
+                    ? 'Audio Clip'
+                    : 'Voice Mic'}
+                </span>
+                {typeof pendingTranscript.confidence === 'number' &&
+                  pendingTranscript.confidence > 0 && (
+                    <span className="rounded-full bg-[#22D3EE]/15 px-2.5 py-0.5 text-[#0284C7] dark:text-[#22D3EE]">
+                      {Math.round(pendingTranscript.confidence * 100)}% confidence
+                    </span>
+                  )}
+              </div>
+            </div>
+            <textarea
+              rows={2}
+              value={pendingTranscript.text}
+              onChange={(e) => onChangePendingTranscript?.(e.target.value)}
+              aria-label="Edit recognized transcript"
+              data-testid="pending-transcript-textarea"
+              className="w-full rounded-xl border border-purple-200/80 dark:border-white/10 bg-white dark:bg-[#101124] px-3 py-2 text-sm text-slate-900 dark:text-[#F8FAFC] focus:outline-none focus:border-[#22D3EE]"
+            />
+            <div className="mt-2.5 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => onDiscardPendingTranscript?.()}
+                className="touch-manipulation inline-flex min-h-[40px] items-center gap-1 rounded-xl border border-slate-300 dark:border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-[#A1A1B8] hover:bg-slate-100 dark:hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDiscardPendingTranscript?.();
+                  onStartListening();
+                }}
+                className="touch-manipulation inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-3 py-1.5 text-xs font-semibold text-[#7C3AED] dark:text-[#C4B5FD] hover:bg-[#8B5CF6]/20"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Re-record</span>
+              </button>
+              <button
+                type="button"
+                disabled={!pendingTranscript.text.trim() || isSending}
+                onClick={() => onConfirmPendingTranscript?.()}
+                data-testid="confirm-transcript-send-button"
+                className="touch-manipulation inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#22D3EE] px-4 py-1.5 text-xs font-bold text-white shadow-glow-primary hover:opacity-95 disabled:opacity-50"
+              >
+                <Send className="h-3.5 w-3.5" />
+                <span>Send Message</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -309,6 +460,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 isRecognitionSupported={isRecognitionSupported}
                 isSynthesisSupported={isSynthesisSupported}
                 isListening={isListening}
+                isRecording={isRecording}
+                isTranscribing={isTranscribing}
+                recordingSeconds={recordingSeconds}
+                isMediaRecorderAvailable={isMediaRecorderAvailable}
                 isPushToTalk={isPushToTalk}
                 isSpeaking={isSpeaking}
                 isPaused={isPaused}
@@ -316,10 +471,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 disabled={isSending}
                 isMuted={isMuted}
                 volume={volume}
+                reviewBeforeSend={reviewBeforeSend}
                 onToggleMute={onToggleMute}
                 onVolumeChange={onVolumeChange}
+                onToggleReviewBeforeSend={onToggleReviewBeforeSend}
                 onStartListening={onStartListening}
                 onStopListening={onStopListening}
+                onStartMediaRecording={onStartMediaRecording}
+                onStopMediaRecording={onStopMediaRecording}
                 onStartPushToTalk={onStartPushToTalk}
                 onStopPushToTalk={onStopPushToTalk}
                 onCancelListening={onCancelListening}
@@ -535,6 +694,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     isRecognitionSupported={isRecognitionSupported}
                     isSynthesisSupported={isSynthesisSupported}
                     isListening={isListening}
+                    isRecording={isRecording}
+                    isTranscribing={isTranscribing}
+                    recordingSeconds={recordingSeconds}
+                    isMediaRecorderAvailable={isMediaRecorderAvailable}
                     isPushToTalk={isPushToTalk}
                     isSpeaking={isSpeaking}
                     isPaused={isPaused}
@@ -542,10 +705,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     disabled={isSending}
                     isMuted={isMuted}
                     volume={volume}
+                    reviewBeforeSend={reviewBeforeSend}
                     onToggleMute={onToggleMute}
                     onVolumeChange={onVolumeChange}
+                    onToggleReviewBeforeSend={onToggleReviewBeforeSend}
                     onStartListening={onStartListening}
                     onStopListening={onStopListening}
+                    onStartMediaRecording={onStartMediaRecording}
+                    onStopMediaRecording={onStopMediaRecording}
                     onStartPushToTalk={onStartPushToTalk}
                     onStopPushToTalk={onStopPushToTalk}
                     onCancelListening={onCancelListening}

@@ -153,6 +153,7 @@ export interface UseSpeechSynthesisReturn {
   lastTtsLatencyMs: number | null;
   availableVoices: SpeechSynthesisVoice[];
   error: VoiceError | null;
+  unlockSynthesis: () => void;
   speak: (text: string, lang?: SupportedLanguage, messageId?: string) => void;
   beginStreamingSpeech: (lang?: SupportedLanguage, messageId?: string) => void;
   enqueueStreamingSentence: (
@@ -204,10 +205,37 @@ export function useSpeechSynthesis(
   const streamSessionIdRef = useRef<number>(0);
   const streamAccumulatedTextRef = useRef<string>('');
   const onPlaybackCompleteRef = useRef(options.onPlaybackComplete);
+  const cancelDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepAliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isUnlockedRef = useRef<boolean>(false);
 
   useEffect(() => {
     onPlaybackCompleteRef.current = options.onPlaybackComplete;
   }, [options.onPlaybackComplete]);
+
+  /**
+   * Unlocks Web Speech playback inside a user tap/click gesture so mobile Safari
+   * and Android Chrome permit async TTS replies immediately after streaming completes.
+   */
+  const unlockSynthesis = useCallback(() => {
+    if (
+      isUnlockedRef.current ||
+      !isSupported ||
+      typeof window === 'undefined' ||
+      typeof SpeechSynthesisUtterance === 'undefined'
+    ) {
+      return;
+    }
+    try {
+      const primer = new SpeechSynthesisUtterance(' ');
+      primer.volume = 0;
+      primer.rate = 2;
+      window.speechSynthesis.speak(primer);
+      isUnlockedRef.current = true;
+    } catch {
+      // Ignore mobile autoplay edge cases cleanly
+    }
+  }, [isSupported]);
 
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
@@ -257,7 +285,16 @@ export function useSpeechSynthesis(
     }
 
     return () => {
+      if (cancelDelayTimerRef.current) {
+        clearTimeout(cancelDelayTimerRef.current);
+      }
+      if (keepAliveIntervalRef.current) {
+        clearInterval(keepAliveIntervalRef.current);
+      }
       try {
+        if ('onvoiceschanged' in window.speechSynthesis) {
+          window.speechSynthesis.onvoiceschanged = null;
+        }
         window.speechSynthesis.cancel();
       } catch {
         // ignore cleanup error
@@ -265,8 +302,20 @@ export function useSpeechSynthesis(
     };
   }, [isSupported]);
 
+  const clearSpeechTimers = useCallback(() => {
+    if (cancelDelayTimerRef.current) {
+      clearTimeout(cancelDelayTimerRef.current);
+      cancelDelayTimerRef.current = null;
+    }
+    if (keepAliveIntervalRef.current) {
+      clearInterval(keepAliveIntervalRef.current);
+      keepAliveIntervalRef.current = null;
+    }
+  }, []);
+
   const stop = useCallback(() => {
     playbackSessionRef.current += 1;
+    clearSpeechTimers();
     streamQueueRef.current = [];
     isUtterancePlayingRef.current = false;
     isStreamOpenRef.current = false;
@@ -281,7 +330,7 @@ export function useSpeechSynthesis(
     setIsPaused(false);
     setActiveMessageId(null);
     transitionTo('idle');
-  }, [isSupported, transitionTo]);
+  }, [clearSpeechTimers, isSupported, transitionTo]);
 
   const pumpStreamQueue = useCallback(
     (session: number) => {
@@ -372,6 +421,15 @@ export function useSpeechSynthesis(
       utterance.onerror = (event) => {
         if (playbackSessionRef.current !== session) return;
         isUtterancePlayingRef.current = false;
+        if (event.error === 'not-allowed') {
+          streamQueueRef.current = [];
+          isStreamOpenRef.current = false;
+          setIsSpeaking(false);
+          setIsPaused(false);
+          setActiveMessageId(null);
+          transitionTo('idle');
+          return;
+        }
         if (event.error === 'canceled' || event.error === 'interrupted') {
           setIsSpeaking(false);
           setIsPaused(false);
@@ -595,7 +653,10 @@ export function useSpeechSynthesis(
         };
 
         speakChunkAt(0);
+        // Schedule with tiny 35ms cancel-guard delay on mobile WebKit so queued cancel() doesn't abort chunk 0
+        void currentSession;
       } catch {
+        clearSpeechTimers();
         const errObj: VoiceError = {
           code: 'SYNTHESIS_UNAVAILABLE',
           message: 'Speech playback could not be started.',
@@ -657,6 +718,7 @@ export function useSpeechSynthesis(
     lastTtsLatencyMs,
     availableVoices,
     error,
+    unlockSynthesis,
     speak,
     beginStreamingSpeech,
     enqueueStreamingSentence,

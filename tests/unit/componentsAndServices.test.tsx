@@ -222,6 +222,9 @@ describe('Unit: Gemini Context Builder & Model Resolution', () => {
 
     expect(
       buildSystemInstruction('en-US', { styleMode: 'turbo' })
-    ).toContain('Turbo Instant');
+    ).toContain('Concise Direct');
+    expect(
+      buildSystemInstruction('en-US', { styleMode: 'turbo' })
+    ).toContain('IMPORTANT RULES:');
   });
 });

@@ -162,10 +162,12 @@ export const DashboardPage: React.FC = () => {
     isSending,
     streamingMessageId,
     error: chatError,
+    failedDraft,
     lastFirstTokenMs,
     lastLlmLatencyMs,
     lastResponseCached,
     sendMessage,
+    retryFailedMessage,
     clearChatError,
   } = useChat({
     styleMode,
@@ -197,10 +199,19 @@ export const DashboardPage: React.FC = () => {
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
 
   const handleStartListening = useCallback(() => {
+    speechSynthesis.unlockSynthesis();
     if (speechSynthesis.isSpeaking) {
       speechSynthesis.stop();
     }
     void speechRecognition.startListening(language);
+  }, [language, speechRecognition, speechSynthesis]);
+
+  const handleStartMediaRecording = useCallback(() => {
+    speechSynthesis.unlockSynthesis();
+    if (speechSynthesis.isSpeaking) {
+      speechSynthesis.stop();
+    }
+    void speechRecognition.startMediaRecording(language);
   }, [language, speechRecognition, speechSynthesis]);
 
   useEffect(() => {
@@ -208,6 +219,7 @@ export const DashboardPage: React.FC = () => {
   }, [handleStartListening]);
 
   const handleStartPushToTalk = useCallback(() => {
+    speechSynthesis.unlockSynthesis();
     if (speechSynthesis.isSpeaking) {
       speechSynthesis.stop();
     }
@@ -429,14 +441,25 @@ export const DashboardPage: React.FC = () => {
             streamingMessageId={streamingMessageId}
             chatError={combinedChatError}
             voiceError={voiceError?.message || null}
+            failedDraft={failedDraft}
+            onRetryFailedMessage={() => {
+              speechSynthesis.unlockSynthesis();
+              void retryFailedMessage();
+            }}
             isRecognitionSupported={speechRecognition.isSupported}
             isSynthesisSupported={speechSynthesis.isSupported}
             isListening={speechRecognition.isListening}
+            isRecording={speechRecognition.isRecording}
+            isTranscribing={speechRecognition.isTranscribing}
+            recordingSeconds={speechRecognition.recordingSeconds}
+            isMediaRecorderAvailable={speechRecognition.isMediaRecorderAvailable}
             isPushToTalk={speechRecognition.isPushToTalk}
             isSpeaking={speechSynthesis.isSpeaking}
             isPaused={speechSynthesis.isPaused}
             isMuted={speechSynthesis.isMuted}
             volume={speechSynthesis.volume}
+            reviewBeforeSend={speechRecognition.reviewBeforeSend}
+            pendingTranscript={speechRecognition.pendingTranscript}
             activeSpeakingMessageId={speechSynthesis.activeMessageId}
             hasReplayableResponse={Boolean(
               speechSynthesis.lastSpokenText || latestAssistantMessage
@@ -458,14 +481,30 @@ export const DashboardPage: React.FC = () => {
             onRetryConnection={() => void retryConnection()}
             onToggleMute={speechSynthesis.toggleMute}
             onVolumeChange={speechSynthesis.setVolume}
+            onToggleReviewBeforeSend={() =>
+              speechRecognition.setReviewBeforeSend(
+                !speechRecognition.reviewBeforeSend
+              )
+            }
+            onChangePendingTranscript={speechRecognition.setPendingTranscriptText}
+            onConfirmPendingTranscript={() => {
+              speechSynthesis.unlockSynthesis();
+              speechRecognition.confirmPendingTranscript();
+            }}
+            onDiscardPendingTranscript={
+              speechRecognition.discardPendingTranscript
+            }
             onSelectCharacter={selectCharacter}
             onOpenVoiceStudio={() => setActiveView('studio')}
             onOpenCharacterGallery={() => setActiveView('gallery')}
             onSelectSuggestedPrompt={(prompt) => {
+              speechSynthesis.unlockSynthesis();
               void sendMessage(prompt, 'text');
             }}
             onStartListening={handleStartListening}
             onStopListening={speechRecognition.stopListening}
+            onStartMediaRecording={handleStartMediaRecording}
+            onStopMediaRecording={speechRecognition.stopMediaRecording}
             onStartPushToTalk={handleStartPushToTalk}
             onStopPushToTalk={speechRecognition.stopPushToTalk}
             onCancelListening={speechRecognition.cancelListening}
@@ -489,13 +528,21 @@ export const DashboardPage: React.FC = () => {
             language={language}
             isSending={isSending}
             isListening={speechRecognition.isListening}
+            isRecording={speechRecognition.isRecording}
+            isTranscribing={speechRecognition.isTranscribing}
+            recordingSeconds={speechRecognition.recordingSeconds}
             isRecognitionSupported={speechRecognition.isSupported}
             liveTranscript={liveTranscriptPreview}
             onSendMessage={async (text) => {
+              speechSynthesis.unlockSynthesis();
               await sendMessage(text, 'text');
             }}
             onStartVoice={handleStartListening}
-            onStopVoice={speechRecognition.stopListening}
+            onStopVoice={
+              speechRecognition.isRecording
+                ? speechRecognition.stopMediaRecording
+                : speechRecognition.stopListening
+            }
           />
         )}
       </AppLayout>

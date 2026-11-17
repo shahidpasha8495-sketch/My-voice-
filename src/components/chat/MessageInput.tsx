@@ -1,4 +1,4 @@
-import { Mic, MicOff, Send, Square } from 'lucide-react';
+import { Loader2, Mic, MicOff, Send, Square } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import type { SupportedLanguage } from '../../types';
 import { cn } from '../../utils/formatters';
@@ -9,6 +9,9 @@ export interface MessageInputProps {
   language: SupportedLanguage;
   isSending: boolean;
   isListening: boolean;
+  isRecording?: boolean;
+  isTranscribing?: boolean;
+  recordingSeconds?: number;
   isRecognitionSupported: boolean;
   liveTranscript?: string;
   onSendMessage: (message: string) => Promise<void> | void;
@@ -20,6 +23,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   language,
   isSending,
   isListening,
+  isRecording = false,
+  isTranscribing = false,
+  recordingSeconds = 0,
   isRecognitionSupported,
   liveTranscript,
   onSendMessage,
@@ -97,33 +103,45 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           {/* Prominent Microphone Button */}
           <button
             type="button"
-            disabled={isSending || !isRecognitionSupported}
+            disabled={isSending || isTranscribing || !isRecognitionSupported}
             onClick={isListening ? onStopVoice : onStartVoice}
             aria-label={
               !isRecognitionSupported
                 ? 'Speech recognition not supported in this browser'
-                : isListening
-                  ? 'Stop microphone listening'
-                  : 'Start voice input'
+                : isTranscribing
+                  ? 'Transcribing recorded audio'
+                  : isRecording
+                    ? 'Stop audio recording'
+                    : isListening
+                      ? 'Stop microphone listening'
+                      : 'Start voice input'
             }
             title={
               !isRecognitionSupported
                 ? 'Voice recognition is not supported in this browser'
-                : isListening
-                  ? 'Stop listening'
-                  : `Speak in ${langMeta.name} (${langMeta.nativeName})`
+                : isTranscribing
+                  ? 'Transcribing your voice clip…'
+                  : isRecording
+                    ? 'Stop recording and transcribe'
+                    : isListening
+                      ? 'Stop listening'
+                      : `Speak in ${langMeta.name} (${langMeta.nativeName})`
             }
             className={cn(
-              'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all',
+              'touch-manipulation flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-xl transition-all',
               !isRecognitionSupported
                 ? 'bg-white/5 text-[#72758E]/50 cursor-not-allowed'
-                : isListening
-                  ? 'bg-[#22D3EE] text-[#090914] shadow-glow-secondary animate-pulse'
-                  : 'bg-purple-100/80 dark:bg-[#101124] text-[#8B5CF6] dark:text-[#22D3EE] hover:bg-[#8B5CF6]/20 hover:text-[#F8FAFC] border border-purple-200/60 dark:border-white/[0.08]'
+                : isTranscribing
+                  ? 'bg-[#8B5CF6]/20 text-[#22D3EE] cursor-wait'
+                  : isListening
+                    ? 'bg-[#22D3EE] text-[#090914] shadow-glow-secondary animate-pulse'
+                    : 'bg-purple-100/80 dark:bg-[#101124] text-[#8B5CF6] dark:text-[#22D3EE] hover:bg-[#8B5CF6]/20 hover:text-[#F8FAFC] border border-purple-200/60 dark:border-white/[0.08]'
             )}
           >
             {!isRecognitionSupported ? (
               <MicOff className="h-5 w-5" />
+            ) : isTranscribing ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
             ) : isListening ? (
               <Square className="h-4 w-4 fill-current" />
             ) : (
@@ -137,16 +155,20 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               ref={textareaRef}
               rows={1}
               value={isListening && liveTranscript ? liveTranscript : text}
-              disabled={isSending || isListening}
+              disabled={isSending || isListening || isTranscribing}
               onChange={(e) => {
                 setText(e.target.value);
                 if (validationError) setValidationError(null);
               }}
               onKeyDown={handleKeyDown}
               placeholder={
-                isListening
-                  ? "I'm listening..."
-                  : 'Talk to your little AI companion...'
+                isTranscribing
+                  ? 'Transcribing recorded audio…'
+                  : isRecording
+                    ? `Recording voice clip (${recordingSeconds}s / 30s)… Tap stop to transcribe`
+                    : isListening
+                      ? "I'm listening..."
+                      : 'Talk or type to your little AI companion...'
               }
               aria-label="Message input"
               data-testid="message-textarea"
@@ -157,13 +179,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           {/* Send Button */}
           <button
             type="button"
-            disabled={isSending || isListening || !text.trim() || isOverLimit}
+            disabled={isSending || isListening || isTranscribing || !text.trim() || isOverLimit}
             onClick={() => void handleSend()}
             aria-label="Send message"
             data-testid="send-message-button"
             className={cn(
-              'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all',
-              text.trim() && !isSending && !isListening && !isOverLimit
+              'touch-manipulation flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-xl transition-all',
+              text.trim() && !isSending && !isListening && !isTranscribing && !isOverLimit
                 ? 'bg-gradient-to-r from-[#8B5CF6] via-[#A855F7] to-[#22D3EE] text-[#F8FAFC] shadow-glow-primary hover:opacity-95'
                 : 'bg-slate-200/70 dark:bg-white/5 text-slate-400 dark:text-[#72758E]/50 cursor-not-allowed'
             )}

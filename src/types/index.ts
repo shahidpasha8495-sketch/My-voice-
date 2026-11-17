@@ -46,26 +46,32 @@ export type SoundscapeType = 'off' | 'rain' | 'aurora';
 export type MessageRole = 'user' | 'assistant';
 
 /**
- * All 9 mandatory voice interaction states from Section 5:
+ * Synchronized voice & mobile recording interaction states:
  * 1. idle
- * 2. requesting_permission
- * 3. listening
- * 4. speech_detected
- * 5. processing
- * 6. generating_response
- * 7. speaking
- * 8. paused
- * 9. error
+ * 2. requesting_permission (Permission requested)
+ * 3. listening (Web Speech API active)
+ * 4. speech_detected (Speech captured)
+ * 5. recording (MediaRecorder mobile audio fallback)
+ * 6. transcribing (Uploading & Gemini audio transcription)
+ * 7. processing (Preparing AI request / speech stop)
+ * 8. generating_response (Gemini streaming response)
+ * 9. speaking (Speech synthesis playback active)
+ * 10. paused
+ * 11. completed
+ * 12. error
  */
 export type VoiceState =
   | 'idle'
   | 'requesting_permission'
   | 'listening'
   | 'speech_detected'
+  | 'recording'
+  | 'transcribing'
   | 'processing'
   | 'generating_response'
   | 'speaking'
   | 'paused'
+  | 'completed'
   | 'error';
 
 export type VoiceErrorCode =
@@ -74,6 +80,9 @@ export type VoiceErrorCode =
   | 'SPEECH_API_UNSUPPORTED'
   | 'RECOGNITION_INTERRUPTED'
   | 'EMPTY_TRANSCRIPTION'
+  | 'RECORDING_FAILED'
+  | 'TRANSCRIPTION_FAILED'
+  | 'AUDIO_TOO_LARGE'
   | 'SYNTHESIS_UNAVAILABLE'
   | 'UNKNOWN_VOICE_ERROR';
 
@@ -156,7 +165,25 @@ export interface ChatResponsePayload {
   firstTokenMs?: number;
   latencyMs?: number;
   cached?: boolean;
+  interrupted?: boolean;
   error?: string;
+}
+
+export interface TranscribeRequestPayload {
+  audioBase64: string;
+  mimeType: string;
+  language: SupportedLanguage;
+  durationSeconds?: number;
+}
+
+export interface TranscribeResponsePayload {
+  success: boolean;
+  transcript: string;
+  language: SupportedLanguage;
+  confidence?: number;
+  provider?: string;
+  error?: string;
+  code?: string;
 }
 
 export interface ConversationsListResponse {

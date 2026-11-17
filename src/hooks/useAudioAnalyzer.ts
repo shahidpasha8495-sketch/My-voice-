@@ -22,7 +22,9 @@ export function useAudioAnalyzer(voiceState: VoiceState): AudioAnalyzerState {
   const streamRef = useRef<MediaStream | null>(null);
 
   const isListening =
-    voiceState === 'listening' || voiceState === 'speech_detected';
+    voiceState === 'listening' ||
+    voiceState === 'speech_detected' ||
+    voiceState === 'recording';
   const isSpeaking = voiceState === 'speaking';
   const isActive = isListening || isSpeaking;
 

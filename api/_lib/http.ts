@@ -10,7 +10,8 @@ export interface VercelResponse extends ServerResponse {
   json?: (data: unknown) => VercelResponse;
 }
 
-export const MAX_REQUEST_BODY_BYTES = 32 * 1024; // 32 KB
+export const MAX_REQUEST_BODY_BYTES = 32 * 1024; // 32 KB default JSON limit
+export const MAX_AUDIO_UPLOAD_BODY_BYTES = 6 * 1024 * 1024; // 6 MB base64 JSON wrapper limit for <= 4 MB audio
 
 export class ApiError extends Error {
   public readonly statusCode: number;
@@ -51,11 +52,14 @@ export function sendError(
   });
 }
 
-export async function parseJsonBody<T = unknown>(req: VercelRequest): Promise<T> {
+export async function parseJsonBody<T = unknown>(
+  req: VercelRequest,
+  maxBytes = MAX_REQUEST_BODY_BYTES
+): Promise<T> {
   // If already parsed by Vercel runtime
   if (req.body !== undefined && req.body !== null) {
     if (typeof req.body === 'string') {
-      if (Buffer.byteLength(req.body, 'utf8') > MAX_REQUEST_BODY_BYTES) {
+      if (Buffer.byteLength(req.body, 'utf8') > maxBytes) {
         throw new ApiError(413, 'Request payload is too large.', 'PAYLOAD_TOO_LARGE');
       }
       try {
@@ -66,7 +70,7 @@ export async function parseJsonBody<T = unknown>(req: VercelRequest): Promise<T>
     }
     if (typeof req.body === 'object') {
       const serialized = JSON.stringify(req.body);
-      if (Buffer.byteLength(serialized, 'utf8') > MAX_REQUEST_BODY_BYTES) {
+      if (Buffer.byteLength(serialized, 'utf8') > maxBytes) {
         throw new ApiError(413, 'Request payload is too large.', 'PAYLOAD_TOO_LARGE');
       }
       return req.body as T;
@@ -80,7 +84,7 @@ export async function parseJsonBody<T = unknown>(req: VercelRequest): Promise<T>
     req.on('data', (chunk: Buffer | string) => {
       const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       totalBytes += buf.length;
-      if (totalBytes > MAX_REQUEST_BODY_BYTES) {
+      if (totalBytes > maxBytes) {
         reject(new ApiError(413, 'Request payload is too large.', 'PAYLOAD_TOO_LARGE'));
         req.destroy();
         return;

@@ -32,20 +32,29 @@ export interface UseChatOptions {
   onAssistantResponse?: (message: Message, inputMode: InputMode) => void;
 }
 
+export interface FailedMessageDraft {
+  content: string;
+  inputMode: InputMode;
+  language: SupportedLanguage;
+}
+
 export interface UseChatReturn {
   messages: Message[];
   isLoadingHistory: boolean;
   isSending: boolean;
   streamingMessageId: string | null;
   error: string | null;
+  failedDraft: FailedMessageDraft | null;
   lastFirstTokenMs: number | null;
   lastLlmLatencyMs: number | null;
   lastResponseCached: boolean;
+  lastResponseInterrupted: boolean;
   sendMessage: (
     content: string,
     inputMode?: InputMode,
     overrideLanguage?: SupportedLanguage
   ) => Promise<Message | null>;
+  retryFailedMessage: () => Promise<Message | null>;
   clearChatError: () => void;
   resetMessages: () => void;
 }
@@ -73,9 +82,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [isSending, setIsSending] = useState<boolean>(false);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [failedDraft, setFailedDraft] = useState<FailedMessageDraft | null>(null);
   const [lastFirstTokenMs, setLastFirstTokenMs] = useState<number | null>(null);
   const [lastLlmLatencyMs, setLastLlmLatencyMs] = useState<number | null>(null);
   const [lastResponseCached, setLastResponseCached] = useState<boolean>(false);
+  const [lastResponseInterrupted, setLastResponseInterrupted] = useState<boolean>(false);
 
   const isSubmittingRef = useRef<boolean>(false);
   const skipNextFetchForConvRef = useRef<string | null>(null);
@@ -166,6 +177,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       isSubmittingRef.current = true;
       setIsSending(true);
       setError(null);
+      setFailedDraft(null);
+      setLastResponseInterrupted(false);
       transitionTo('generating_response');
 
       const optimisticUserId = `optimistic-u-${Date.now()}`;
@@ -271,6 +284,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         setLastFirstTokenMs(measuredTtftMs);
         setLastLlmLatencyMs(measuredLlmMs);
         setLastResponseCached(Boolean(response.cached));
+        setLastResponseInterrupted(Boolean(response.interrupted));
+        setFailedDraft(null);
 
         // Log stage latency breakdown for developer visibility
         if (typeof console !== 'undefined' && console.info) {
@@ -301,7 +316,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         return response.assistantMessage;
       } catch (err) {
         setStreamingMessageId(null);
-        // Remove optimistic messages on failure so user can retry cleanly
+        // Preserve original message in failedDraft so user never loses spoken/typed words on failure
+        setFailedDraft({
+          content: validation.sanitized,
+          inputMode,
+          language: effectiveLanguage,
+        });
         setMessages((prev) =>
           prev.filter(
             (m) => m.id !== optimisticUserId && m.id !== optimisticAssistantId
@@ -331,14 +351,23 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     ]
   );
 
+  const retryFailedMessage = useCallback(async (): Promise<Message | null> => {
+    if (!failedDraft || isSubmittingRef.current) return null;
+    const draft = failedDraft;
+    return sendMessage(draft.content, draft.inputMode, draft.language);
+  }, [failedDraft, sendMessage]);
+
   const clearChatError = useCallback(() => {
     setError(null);
+    setFailedDraft(null);
   }, []);
 
   const resetMessages = useCallback(() => {
     setMessages([]);
     setStreamingMessageId(null);
     setError(null);
+    setFailedDraft(null);
+    setLastResponseInterrupted(false);
   }, []);
 
   return {
@@ -347,10 +376,13 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     isSending,
     streamingMessageId,
     error,
+    failedDraft,
     lastFirstTokenMs,
     lastLlmLatencyMs,
     lastResponseCached,
+    lastResponseInterrupted,
     sendMessage,
+    retryFailedMessage,
     clearChatError,
     resetMessages,
   };
