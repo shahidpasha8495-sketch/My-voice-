@@ -11,6 +11,7 @@ import {
 import React from 'react';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
 import type { SupportedLanguage, UserProfile } from '../types';
+import { normalizeError } from '../utils/normalizeError';
 import { isSupportedLanguage, loginSchema, signupSchema } from '../utils/validation';
 
 export const GUEST_ACCESS_TOKEN = 'guest-session-token';
@@ -281,7 +282,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     const validation = loginSchema.safeParse({ email, password });
     if (!validation.success) {
-      setError(validation.error.issues[0]?.message || 'Invalid credentials.');
+      setError(
+        normalizeError(validation.error.issues[0]?.message, 'Invalid credentials.')
+      );
       return false;
     }
 
@@ -293,7 +296,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (signInError || !data.user || !data.session) {
         setError(
-          signInError?.message || 'Invalid email or password. Please try again.'
+          normalizeError(
+            signInError,
+            'Invalid email or password. Please try again.'
+          )
         );
         return false;
       }
@@ -305,8 +311,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userProfile = await fetchOrCreateUserProfile(data.user);
       setProfile(userProfile);
       return true;
-    } catch {
-      setError('Unable to connect. Please try again.');
+    } catch (err) {
+      setError(normalizeError(err, 'Unable to connect. Please try again.'));
       return false;
     }
   }, []);
@@ -337,7 +343,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!validation.success) {
-        setError(validation.error.issues[0]?.message || 'Invalid registration details.');
+        setError(
+          normalizeError(
+            validation.error.issues[0]?.message,
+            'Invalid registration details.'
+          )
+        );
         return false;
       }
 
@@ -356,7 +367,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (signUpError || !data.user) {
-          setError(signUpError?.message || 'Registration failed. Please try again.');
+          setError(
+            normalizeError(signUpError, 'Registration failed. Please try again.')
+          );
           return false;
         }
 

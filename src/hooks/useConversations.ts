@@ -15,6 +15,7 @@ import {
 } from '../services/conversationService';
 import type { Conversation, SupportedLanguage } from '../types';
 import { generateConversationTitle } from '../utils/formatters';
+import { normalizeError } from '../utils/normalizeError';
 import { useAuth } from './useAuth';
 
 export interface ConversationsContextValue {
@@ -58,9 +59,9 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
       const list = await listConversations(accessToken);
       setConversations(list);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Unable to load conversation history.';
-      setError(message);
+      setError(
+        normalizeError(err, 'Unable to load conversation history.')
+      );
     } finally {
       setLoading(false);
     }
@@ -132,11 +133,12 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
         }
         return true;
       } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : 'Unable to delete conversation. Please try again.';
-        setError(message);
+        setError(
+          normalizeError(
+            err,
+            'Unable to delete conversation. Please try again.'
+          )
+        );
         return false;
       }
     },

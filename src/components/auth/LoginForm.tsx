@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { normalizeError } from '../../utils/normalizeError';
 import { loginSchema } from '../../utils/validation';
 
 export interface LoginFormProps {
@@ -52,7 +53,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     }
   };
 
-  const displayError = validationError || error;
+  const rawDisplayError = validationError || error;
+  const displayError = rawDisplayError
+    ? normalizeError(rawDisplayError, 'Unable to sign in. Please try again.')
+    : null;
 
   return (
     <form

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { transcribeRecordedAudio } from '../services/chatService';
 import type { SupportedLanguage, VoiceError, VoiceErrorCode } from '../types';
+import { normalizeError } from '../utils/normalizeError';
 import { playMicOpenChime, playMicStopChime } from '../utils/soundEffects';
 import { MAX_AUDIO_BYTES } from '../utils/validation';
 import { useAuth } from './useAuth';
@@ -176,8 +177,11 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 function mapMediaDeviceError(err: unknown): { code: VoiceErrorCode; message: string } {
-  const errName = err instanceof Error ? err.name : '';
-  const errMsg = err instanceof Error ? err.message : String(err);
+  const errName =
+    err && typeof err === 'object' && 'name' in err
+      ? String((err as { name: unknown }).name)
+      : '';
+  const errMsg = normalizeError(err, '');
 
   if (
     errName === 'NotAllowedError' ||
@@ -186,34 +190,35 @@ function mapMediaDeviceError(err: unknown): { code: VoiceErrorCode; message: str
   ) {
     return {
       code: 'PERMISSION_DENIED',
-      message:
-        'Microphone permission was denied. In your browser or phone Settings, allow Microphone access for this site, then tap Retry.',
+      message: 'Please allow microphone access in your browser settings.',
     };
   }
   if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
     return {
       code: 'MIC_UNAVAILABLE',
       message:
-        'No microphone hardware was found on this device. Connect a headset or use the text input below.',
+        'Microphone is unavailable. Please connect a microphone or use text chat.',
     };
   }
   if (errName === 'NotReadableError' || errName === 'TrackStartError') {
     return {
       code: 'MIC_UNAVAILABLE',
       message:
-        'Your microphone is currently busy in another app. Close other calls/apps using the mic and tap Retry.',
+        'Your microphone is currently busy in another app. Close other audio apps and try again.',
     };
   }
   if (errName === 'SecurityError') {
     return {
       code: 'PERMISSION_DENIED',
-      message:
-        'Microphone recording requires an HTTPS connection. Please open this website over HTTPS.',
+      message: 'Microphone access requires a secure HTTPS connection.',
     };
   }
   return {
     code: 'RECORDING_FAILED',
-    message: 'Could not start audio recording on this device. Please try again or type your message.',
+    message: normalizeError(
+      err,
+      'Could not start audio recording on this device. Please try again or type your message.'
+    ),
   };
 }
 
@@ -311,6 +316,9 @@ export function useSpeechRecognition(
   const isCancelledRef = useRef<boolean>(false);
   const hasErroredRef = useRef<boolean>(false);
   const isPushToTalkRef = useRef<boolean>(false);
+  const preferMediaRecorderFallbackRef = useRef<boolean>(false);
+  const isListeningRef = useRef<boolean>(false);
+  const isRecordingRef = useRef<boolean>(false);
   const collectedFinalRef = useRef<string>('');
   const collectedInterimRef = useRef<string>('');
   const lastConfidenceRef = useRef<number>(1);
@@ -338,6 +346,14 @@ export function useSpeechRecognition(
     setIsSpeechApiSupported(Boolean(getSpeechRecognitionConstructor()));
     setIsMediaRecorderAvailable(isMediaRecorderSupported());
   }, []);
+
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   const clearTimers = useCallback(() => {
     if (vadTimerRef.current) {
@@ -390,14 +406,18 @@ export function useSpeechRecognition(
       clearTimers();
       releaseMediaResources();
       hasErroredRef.current = true;
-      const errObj: VoiceError = { code, message };
+      const safeMessage = normalizeError(
+        message,
+        'Something unexpected happened. Please try again.'
+      );
+      const errObj: VoiceError = { code, message: safeMessage };
       setError(errObj);
       setIsListening(false);
       setIsRecording(false);
       setIsTranscribing(false);
       setIsPushToTalk(false);
       isPushToTalkRef.current = false;
-      setVoiceErrorState(code, message);
+      setVoiceErrorState(code, safeMessage);
     },
     [clearTimers, releaseMediaResources, setVoiceErrorState]
   );
@@ -422,11 +442,35 @@ export function useSpeechRecognition(
   }, [clearTimers]);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (
+        typeof document !== 'undefined' &&
+        document.hidden &&
+        (isListeningRef.current || isRecordingRef.current)
+      ) {
+        isCancelledRef.current = true;
+        cleanupRecognition();
+        releaseMediaResources();
+        setIsListening(false);
+        setIsRecording(false);
+        setIsPushToTalk(false);
+        isPushToTalkRef.current = false;
+        transitionTo('idle');
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
     return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
       cleanupRecognition();
       releaseMediaResources();
     };
-  }, [cleanupRecognition, releaseMediaResources]);
+  }, [cleanupRecognition, releaseMediaResources, transitionTo]);
 
   const deliverTranscript = useCallback(
     (params: {
@@ -641,10 +685,10 @@ export function useSpeechRecognition(
             });
           } catch (transcribeErr) {
             setIsTranscribing(false);
-            const msg =
-              transcribeErr instanceof Error
-                ? transcribeErr.message
-                : 'Unable to transcribe recorded audio. Please try again or type your message.';
+            const msg = normalizeError(
+              transcribeErr,
+              'Unable to transcribe recorded audio. Please try again or type your message.'
+            );
             reportError('TRANSCRIPTION_FAILED', msg);
           }
         };
@@ -721,9 +765,10 @@ export function useSpeechRecognition(
 
       const RecognitionCtor = getSpeechRecognitionConstructor();
 
-      // Priority 2 Fallback: If browser Web Speech API is absent (e.g. Firefox, iOS WebViews, Samsung Internet),
+      // Priority 2 Fallback: If browser Web Speech API is absent (e.g. Firefox, iOS WebViews)
+      // or previously blocked/unreliable in this session (e.g. Brave Android privacy shield),
       // use MediaRecorder audio capture + backend Gemini transcription seamlessly!
-      if (!RecognitionCtor) {
+      if (!RecognitionCtor || (preferMediaRecorderFallbackRef.current && isMediaRecorderSupported())) {
         if (isMediaRecorderSupported()) {
           isPushToTalkRef.current = pttMode;
           setIsPushToTalk(pttMode);
@@ -732,7 +777,7 @@ export function useSpeechRecognition(
         }
         reportError(
           'SPEECH_API_UNSUPPORTED',
-          'Voice capture is not supported in this browser. Please type your message below.'
+          'Voice recognition is unavailable in this browser. Please use text chat.'
         );
         return;
       }
@@ -886,12 +931,15 @@ export function useSpeechRecognition(
             return;
           }
 
-          // Mobile Safari / Chrome fallback: if browser Speech Recognition engine is blocked or hits
-          // a service/network error (common on iOS Safari), degrade cleanly or switch to MediaRecorder!
+          // Mobile Brave / Safari / Chrome fallback: if browser Speech Recognition engine is blocked,
+          // unsupported for this language, or hits a service/network error, remember and switch to MediaRecorder!
           if (
-            (errType === 'service-not-allowed' || errType === 'network') &&
+            (errType === 'service-not-allowed' ||
+              errType === 'network' ||
+              errType === 'language-not-supported') &&
             isMediaRecorderSupported()
           ) {
+            preferMediaRecorderFallbackRef.current = true;
             cleanupRecognition();
             setIsListening(false);
             void startMediaRecording(activeLangRef.current);
@@ -901,7 +949,7 @@ export function useSpeechRecognition(
           if (errType === 'not-allowed' || errType === 'service-not-allowed') {
             reportError(
               'PERMISSION_DENIED',
-              'Microphone access is blocked. Tap the browser address bar settings, allow Microphone permission, then tap Retry.'
+              'Please allow microphone access in your browser settings.'
             );
             return;
           }
@@ -909,7 +957,7 @@ export function useSpeechRecognition(
           if (errType === 'audio-capture') {
             reportError(
               'MIC_UNAVAILABLE',
-              'No working microphone was detected. Check your device audio settings or connect a headset.'
+              'Microphone is unavailable. Please check your device microphone or use text chat.'
             );
             return;
           }
@@ -917,7 +965,7 @@ export function useSpeechRecognition(
           if (errType === 'network') {
             reportError(
               'RECOGNITION_INTERRUPTED',
-              'Browser speech recognition could not connect. Use "Record Audio" or type your message below.'
+              'Your internet connection seems unstable.'
             );
             return;
           }
@@ -925,14 +973,17 @@ export function useSpeechRecognition(
           if (errType === 'no-speech') {
             reportError(
               'EMPTY_TRANSCRIPTION',
-              'No speech was heard. Speak closer to the mic, hold "Hold to Talk", or use "Record Audio".'
+              "I couldn't hear you. Please try again."
             );
             return;
           }
 
           reportError(
             'RECOGNITION_INTERRUPTED',
-            'Voice recognition was interrupted. Tap Start Mic or Record Audio to try again.'
+            normalizeError(
+              event,
+              'Voice recognition was interrupted. Tap Start Mic or Record Audio to try again.'
+            )
           );
         };
 
@@ -964,7 +1015,7 @@ export function useSpeechRecognition(
           if (!finalOutput) {
             reportError(
               'EMPTY_TRANSCRIPTION',
-              'No speech was recognized. Try speaking closer to the mic or tap "Record Audio".'
+              "I couldn't hear you. Please try again."
             );
             return;
           }

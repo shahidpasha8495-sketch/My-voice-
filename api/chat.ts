@@ -1,7 +1,8 @@
-import type { ConversationStyleMode, InputMode, Message, SupportedLanguage } from '../src/types';
-import { detectMessageLanguage } from '../src/utils/language';
-import { CONTEXT_WINDOW_LIMIT, chatRequestSchema } from '../src/utils/validation';
-import { generateGeminiReply, generateGeminiReplyStream } from './_lib/gemini';
+import type { ConversationStyleMode, InputMode, Message, SupportedLanguage } from '../src/types/index.js';
+import { detectMessageLanguage } from '../src/utils/language.js';
+import { normalizeError } from '../src/utils/normalizeError.js';
+import { CONTEXT_WINDOW_LIMIT, chatRequestSchema } from '../src/utils/validation.js';
+import { generateGeminiReply, generateGeminiReplyStream } from './_lib/gemini.js';
 import {
   ApiError,
   applySecurityHeaders,
@@ -11,13 +12,13 @@ import {
   sendJson,
   type VercelRequest,
   type VercelResponse,
-} from './_lib/http';
-import { applyRateLimitHeaders, checkRateLimit } from './_lib/rateLimit';
+} from './_lib/http.js';
+import { applyRateLimitHeaders, checkRateLimit } from './_lib/rateLimit.js';
 import {
   createPrivilegedSupabaseClient,
   createUserSupabaseClient,
   verifyRequestAuth,
-} from './_lib/supabaseServer';
+} from './_lib/supabaseServer.js';
 
 const GUEST_BEARER_HEADER = 'bearer guest-session-token';
 
@@ -139,8 +140,7 @@ async function streamReplyToSseResponse(params: {
     });
     res.end();
   } catch (err: unknown) {
-    const msg =
-      err instanceof Error ? err.message : 'Unable to stream AI response.';
+    const msg = normalizeError(err, 'Unable to stream AI response.');
     writeSseEvent(res, 'error', { success: false, error: msg });
     res.end();
   }

@@ -27,6 +27,7 @@ import type {
   SoundscapeType,
   SupportedLanguage,
 } from '../types';
+import { normalizeError } from '../utils/normalizeError';
 import { soundscapeEngine } from '../utils/soundEffects';
 
 export const DashboardPage: React.FC = () => {
@@ -312,7 +313,28 @@ export const DashboardPage: React.FC = () => {
     }
   }, [language, latestAssistantMessage, speechSynthesis]);
 
-  const combinedChatError = chatError || conversationError;
+  const rawChatError = chatError || conversationError;
+  const combinedChatError = rawChatError
+    ? normalizeError(rawChatError, 'Something unexpected happened. Please try again.')
+    : null;
+  const normalizedVoiceError = voiceError
+    ? normalizeError(voiceError, 'Voice interaction issue. Please try again.')
+    : null;
+
+  // Auto-clear temporary voice notices (like brief no-speech / interrupted events)
+  useEffect(() => {
+    if (
+      !voiceError ||
+      (voiceError.code !== 'EMPTY_TRANSCRIPTION' &&
+        voiceError.code !== 'RECOGNITION_INTERRUPTED')
+    ) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      clearVoiceError();
+    }, 7000);
+    return () => clearTimeout(timer);
+  }, [voiceError, clearVoiceError]);
 
   const sidebarNode = (closeMobile?: () => void) => (
     <Sidebar
@@ -440,7 +462,7 @@ export const DashboardPage: React.FC = () => {
             isSending={isSending}
             streamingMessageId={streamingMessageId}
             chatError={combinedChatError}
-            voiceError={voiceError?.message || null}
+            voiceError={normalizedVoiceError}
             failedDraft={failedDraft}
             onRetryFailedMessage={() => {
               speechSynthesis.unlockSynthesis();

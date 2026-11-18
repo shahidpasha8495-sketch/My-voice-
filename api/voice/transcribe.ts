@@ -1,9 +1,9 @@
-import { detectMessageLanguage } from '../../src/utils/language';
+import { detectMessageLanguage } from '../../src/utils/language.js';
 import {
   MAX_AUDIO_BYTES,
   voiceTranscribeSchema,
-} from '../../src/utils/validation';
-import { transcribeAudioWithGemini } from '../_lib/gemini';
+} from '../../src/utils/validation.js';
+import { transcribeAudioWithGemini } from '../_lib/gemini.js';
 import {
   ApiError,
   MAX_AUDIO_UPLOAD_BODY_BYTES,
@@ -14,9 +14,9 @@ import {
   sendJson,
   type VercelRequest,
   type VercelResponse,
-} from '../_lib/http';
-import { applyRateLimitHeaders, checkRateLimit } from '../_lib/rateLimit';
-import { verifyRequestAuth } from '../_lib/supabaseServer';
+} from '../_lib/http.js';
+import { applyRateLimitHeaders, checkRateLimit } from '../_lib/rateLimit.js';
+import { verifyRequestAuth } from '../_lib/supabaseServer.js';
 
 const GUEST_BEARER_HEADER = 'bearer guest-session-token';
 

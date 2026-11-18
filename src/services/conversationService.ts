@@ -6,6 +6,7 @@ import type {
   Message,
   SupportedLanguage,
 } from '../types';
+import { normalizeApiErrorPayload, normalizeError } from '../utils/normalizeError';
 import { getAccessToken, supabase } from './supabase';
 
 const GUEST_CONVERSATIONS_KEY = 'myvoice.guest_conversations';
@@ -26,7 +27,9 @@ export function getGuestConversations(): Conversation[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(GUEST_CONVERSATIONS_KEY);
-    return raw ? (JSON.parse(raw) as Conversation[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as Conversation[]) : [];
   } catch {
     return [];
   }
@@ -45,7 +48,11 @@ export function getGuestMessagesMap(): Record<string, Message[]> {
   if (typeof window === 'undefined') return {};
   try {
     const raw = localStorage.getItem(GUEST_MESSAGES_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, Message[]>) : {};
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, Message[]>)
+      : {};
   } catch {
     return {};
   }
@@ -78,7 +85,7 @@ export class ConversationServiceError extends Error {
   public readonly statusCode: number;
 
   constructor(message: string, statusCode = 500) {
-    super(message);
+    super(normalizeError(message, 'Unable to manage conversations. Please try again.'));
     this.name = 'ConversationServiceError';
     this.statusCode = statusCode;
   }
@@ -427,10 +434,12 @@ export async function removeConversation(
     }
     let message = 'Unable to delete conversation. Please try again.';
     try {
-      const errBody = (await response.json()) as { error?: string };
-      if (errBody.error) {
-        message = errBody.error;
-      }
+      const errBody = (await response.json()) as unknown;
+      message = normalizeApiErrorPayload(
+        errBody,
+        response.status,
+        'Unable to delete conversation. Please try again.'
+      );
     } catch {
       // ignore JSON parse error
     }

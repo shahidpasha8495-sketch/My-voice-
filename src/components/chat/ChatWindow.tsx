@@ -37,6 +37,7 @@ import type {
 } from '../../types';
 import { cn } from '../../utils/formatters';
 import { FOLLOW_UP_QUICK_ACTIONS, getLanguageMetadata } from '../../utils/language';
+import { normalizeError } from '../../utils/normalizeError';
 import { CharacterSelector } from '../character/CharacterSelector';
 import { VoiceControls } from '../voice/VoiceControls';
 import { VoiceOrb } from '../voice/VoiceOrb';
@@ -215,18 +216,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
+  const safeChatError = chatError
+    ? normalizeError(chatError, 'Unable to complete request. Please try again.')
+    : null;
+  const safeVoiceError = voiceError
+    ? normalizeError(voiceError, 'Voice interaction issue. Please try again.')
+    : null;
+
   return (
     <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 md:px-10">
       <div className="mx-auto flex max-w-5xl flex-col gap-5">
         {/* Error Notifications */}
-        {(chatError || voiceError) && (
+        {(safeChatError || safeVoiceError) && (
           <div className="flex flex-col gap-2" role="alert">
-            {chatError && (
+            {safeChatError && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#F87171]/40 bg-[#F87171]/10 px-4 py-3 text-xs sm:text-sm text-[#EF4444] dark:text-[#F87171]">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <div className="min-w-0">
-                    <span>{chatError}</span>
+                    <span>{safeChatError}</span>
                     {failedDraft && (
                       <p className="mt-1 truncate text-[11px] opacity-80">
                         Draft preserved: &ldquo;{failedDraft.content}&rdquo;
@@ -272,11 +280,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             )}
 
-            {voiceError && (
+            {safeVoiceError && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#F87171]/40 bg-[#F87171]/10 px-4 py-3 text-xs sm:text-sm text-[#EF4444] dark:text-[#F87171]">
                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
                   <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{voiceError}</span>
+                  <span>{safeVoiceError}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button

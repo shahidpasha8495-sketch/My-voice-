@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { IncomingMessage } from 'node:http';
-import { ApiError } from './http';
+import { ApiError } from './http.js';
 
 export interface AuthenticatedIdentity {
   userId: string;

@@ -1,4 +1,4 @@
-import { updateConversationSchema, uuidSchema } from '../../src/utils/validation';
+import { updateConversationSchema, uuidSchema } from '../../src/utils/validation.js';
 import {
   ApiError,
   applySecurityHeaders,
@@ -8,9 +8,9 @@ import {
   sendJson,
   type VercelRequest,
   type VercelResponse,
-} from '../_lib/http';
-import { applyRateLimitHeaders, checkRateLimit } from '../_lib/rateLimit';
-import { createUserSupabaseClient, verifyRequestAuth } from '../_lib/supabaseServer';
+} from '../_lib/http.js';
+import { applyRateLimitHeaders, checkRateLimit } from '../_lib/rateLimit.js';
+import { createUserSupabaseClient, verifyRequestAuth } from '../_lib/supabaseServer.js';
 
 function extractConversationId(req: VercelRequest): string {
   const fromQuery = req.query?.id;

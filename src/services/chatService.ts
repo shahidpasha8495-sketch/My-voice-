@@ -9,6 +9,7 @@ import type {
   TranscribeResponsePayload,
 } from '../types';
 import { detectMessageLanguage } from '../utils/language';
+import { normalizeApiErrorPayload, normalizeError } from '../utils/normalizeError';
 import { validateMessageInput } from '../utils/validation';
 import { appendGuestMessages } from './conversationService';
 import { getAccessToken } from './supabase';
@@ -18,7 +19,12 @@ export class ChatServiceError extends Error {
   public readonly code: string;
 
   constructor(message: string, statusCode = 500, code = 'CHAT_ERROR') {
-    super(message);
+    super(
+      normalizeError(
+        message,
+        "I'm having trouble generating a response. Please try again."
+      )
+    );
     this.name = 'ChatServiceError';
     this.statusCode = statusCode;
     this.code = code;
@@ -103,9 +109,14 @@ export async function transcribeRecordedAudio(
     });
 
     let body: Partial<TranscribeResponsePayload> = {};
+    let rawBody: unknown = {};
     try {
-      body = (await response.json()) as Partial<TranscribeResponsePayload>;
+      rawBody = await response.json();
+      if (rawBody && typeof rawBody === 'object') {
+        body = rawBody as Partial<TranscribeResponsePayload>;
+      }
     } catch {
+      rawBody = {};
       body = {};
     }
 
@@ -117,12 +128,15 @@ export async function transcribeRecordedAudio(
       );
     }
 
-    if (!response.ok || !body.success || !body.transcript) {
+    if (!response.ok || !body.success || typeof body.transcript !== 'string' || !body.transcript) {
       throw new ChatServiceError(
-        body.error ||
-          'Unable to transcribe the recorded audio. Please speak clearly or type your message.',
+        normalizeApiErrorPayload(
+          rawBody,
+          response.status,
+          'Unable to transcribe the recorded audio. Please speak clearly or type your message.'
+        ),
         response.status || 500,
-        body.code || 'TRANSCRIPTION_FAILED'
+        typeof body.code === 'string' ? body.code : 'TRANSCRIPTION_FAILED'
       );
     }
 
@@ -415,28 +429,45 @@ export async function sendChatMessageStream(
     }
 
     if (response.status === 429) {
-      let errMsg = 'Rate limit reached. Please wait a moment and try again.';
+      let errPayload: unknown = {};
       try {
-        const body = (await response.json()) as { error?: string };
-        if (body?.error) errMsg = body.error;
+        errPayload = await response.json();
       } catch {
-        // ignore
+        errPayload = {};
       }
-      throw new ChatServiceError(errMsg, 429, 'RATE_LIMITED');
+      throw new ChatServiceError(
+        normalizeApiErrorPayload(
+          errPayload,
+          429,
+          'Rate limit reached. Please wait a moment and try again.'
+        ),
+        429,
+        'RATE_LIMITED'
+      );
     }
 
     if (!response.ok) {
-      let errBody: { error?: string; code?: string } = {};
+      let rawErrBody: unknown = {};
       try {
-        errBody = (await response.json()) as { error?: string; code?: string };
+        rawErrBody = await response.json();
       } catch {
-        errBody = {};
+        rawErrBody = {};
       }
+      const errCode =
+        rawErrBody &&
+        typeof rawErrBody === 'object' &&
+        'code' in rawErrBody &&
+        typeof (rawErrBody as { code?: unknown }).code === 'string'
+          ? (rawErrBody as { code: string }).code
+          : 'CHAT_SERVER_ERROR';
       throw new ChatServiceError(
-        errBody.error ||
-          `Server error (${response.status}). Please retry your message.`,
+        normalizeApiErrorPayload(
+          rawErrBody,
+          response.status,
+          `Server error (${response.status}). Please retry your message.`
+        ),
         response.status,
-        errBody.code || 'CHAT_SERVER_ERROR'
+        errCode
       );
     }
 
@@ -489,7 +520,8 @@ export async function sendChatMessageStream(
                 callbacks.onMeta?.({ detectedLanguage: detectedLang });
               }
             } else if (currentEvent === 'delta') {
-              const piece = String(eventData.text || '');
+              const piece =
+                typeof eventData.text === 'string' ? eventData.text : '';
               if (piece) {
                 if (firstTokenMs === undefined) {
                   firstTokenMs = Math.max(5, Math.round(performance.now() - startPerf));
@@ -505,9 +537,10 @@ export async function sendChatMessageStream(
                 });
               }
             } else if (currentEvent === 'error') {
-              streamErrorMsg =
-                String(eventData.error || '') ||
-                'AI response was interrupted. Please try again.';
+              streamErrorMsg = normalizeError(
+                eventData.error ?? eventData,
+                'AI response was interrupted. Please try again.'
+              );
             } else if (currentEvent === 'done') {
               const userMessage = eventData.userMessage as Message | undefined;
               const assistantMessage = eventData.assistantMessage as Message | undefined;
@@ -771,13 +804,15 @@ export async function sendChatMessage(
     clearTimeout(timeoutId);
   }
 
-  let body: (Partial<ChatResponsePayload> & { error?: string; code?: string }) | null = null;
+  let rawBody: unknown = null;
+  let body: (Partial<ChatResponsePayload> & { code?: unknown }) | null = null;
   try {
-    body = (await response.json()) as Partial<ChatResponsePayload> & {
-      error?: string;
-      code?: string;
-    };
+    rawBody = await response.json();
+    if (rawBody && typeof rawBody === 'object') {
+      body = rawBody as Partial<ChatResponsePayload> & { code?: unknown };
+    }
   } catch {
+    rawBody = null;
     body = null;
   }
 
@@ -826,16 +861,24 @@ export async function sendChatMessage(
 
   if (response.status === 429) {
     throw new ChatServiceError(
-      body?.error || 'Rate limit reached. Please wait a moment and try again.',
+      normalizeApiErrorPayload(
+        rawBody,
+        429,
+        'Rate limit reached. Please wait a moment and try again.'
+      ),
       429,
       'RATE_LIMITED'
     );
   }
 
   throw new ChatServiceError(
-    body?.error || 'AI response could not be generated. Please try again.',
+    normalizeApiErrorPayload(
+      rawBody,
+      response.status,
+      "I'm having trouble generating a response. Please try again."
+    ),
     response.status || 500,
-    body?.code || 'CHAT_ERROR'
+    typeof body?.code === 'string' ? body.code : 'CHAT_ERROR'
   );
 }
 

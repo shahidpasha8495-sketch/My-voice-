@@ -7,6 +7,7 @@ import React, {
   type ReactNode,
 } from 'react';
 import type { InputMode, VoiceError, VoiceErrorCode, VoiceState } from '../types';
+import { normalizeError } from '../utils/normalizeError';
 
 export const VOICE_STATE_LABELS: Record<VoiceState, string> = {
   idle: 'Ready for voice or text',
@@ -53,7 +54,11 @@ export function useVoiceStateStandalone() {
   }, []);
 
   const setVoiceErrorState = useCallback((code: VoiceErrorCode, message: string) => {
-    setVoiceError({ code, message });
+    const safeMessage = normalizeError(
+      message,
+      'Something unexpected happened. Please try again.'
+    );
+    setVoiceError({ code, message: safeMessage });
     setVoiceState('error');
   }, []);
 

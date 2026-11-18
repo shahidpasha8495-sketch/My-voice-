@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { SupportedLanguage } from '../types';
+import type { SupportedLanguage } from '../types/index.js';
 
 export const SUPPORTED_LANGUAGES: readonly [SupportedLanguage, ...SupportedLanguage[]] = [
   'en-US',

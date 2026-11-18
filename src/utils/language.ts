@@ -1,5 +1,5 @@
-import type { LanguageMetadata, SupportedLanguage } from '../types';
-import { isSupportedLanguage } from './validation';
+import type { LanguageMetadata, SupportedLanguage } from '../types/index.js';
+import { isSupportedLanguage } from './validation.js';
 
 export const LANGUAGE_CONFIGS: Record<SupportedLanguage, LanguageMetadata> = {
   'en-US': {

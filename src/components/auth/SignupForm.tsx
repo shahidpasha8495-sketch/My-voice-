@@ -14,6 +14,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { SupportedLanguage } from '../../types';
 import { LANGUAGE_LIST } from '../../utils/language';
+import { normalizeError } from '../../utils/normalizeError';
 import { signupSchema } from '../../utils/validation';
 
 export interface SignupFormProps {
@@ -74,7 +75,10 @@ export const SignupForm: React.FC<SignupFormProps> = ({
     }
   };
 
-  const displayError = validationError || error;
+  const rawDisplayError = validationError || error;
+  const displayError = rawDisplayError
+    ? normalizeError(rawDisplayError, 'Registration failed. Please try again.')
+    : null;
 
   return (
     <form

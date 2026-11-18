@@ -8,6 +8,7 @@ import type {
   SupportedLanguage,
 } from '../types';
 import { playFirstTokenChime } from '../utils/soundEffects';
+import { normalizeError } from '../utils/normalizeError';
 import { validateMessageInput } from '../utils/validation';
 import { useAuth } from './useAuth';
 import { useCharacter } from './useCharacter';
@@ -134,11 +135,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         }
       } catch (err) {
         if (!cancelled) {
-          const msg =
-            err instanceof Error
-              ? err.message
-              : 'Unable to load conversation messages.';
-          setError(msg);
+          setError(
+            normalizeError(err, 'Unable to load conversation messages.')
+          );
         }
       } finally {
         if (!cancelled) {
@@ -327,10 +326,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             (m) => m.id !== optimisticUserId && m.id !== optimisticAssistantId
           )
         );
-        const errMessage =
-          err instanceof Error
-            ? err.message
-            : 'AI response could not be generated. Please try again.';
+        const errMessage = normalizeError(
+          err,
+          "I'm having trouble generating a response. Please try again."
+        );
         setError(errMessage);
         transitionTo('idle');
         return null;

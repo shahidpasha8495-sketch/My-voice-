@@ -4,9 +4,10 @@ import type {
   InputMode,
   Message,
   SupportedLanguage,
-} from '../../src/types';
-import { CONTEXT_WINDOW_LIMIT } from '../../src/utils/validation';
-import { ApiError } from './http';
+} from '../../src/types/index.js';
+import { normalizeError } from '../../src/utils/normalizeError.js';
+import { CONTEXT_WINDOW_LIMIT } from '../../src/utils/validation.js';
+import { ApiError } from './http.js';
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-4-hydrogen';
 
@@ -19,6 +20,7 @@ const DEPRECATED_MODEL_PREFIXES = [
 // Reuse a singleton GoogleGenAI client per API key to avoid cold-init overhead on every turn
 let cachedClient: GoogleGenAI | null = null;
 let cachedApiKey: string | null = null;
+let interactionsUnsupportedKey: string | null = null;
 
 function getGeminiClient(apiKey: string): GoogleGenAI {
   if (!cachedClient || cachedApiKey !== apiKey) {
@@ -263,8 +265,11 @@ function mapGeminiError(err: unknown): ApiError {
     return err;
   }
 
-  const errorMessage = err instanceof Error ? err.message : String(err);
-  const errorName = err instanceof Error ? err.name : '';
+  const errorMessage = normalizeError(err, '');
+  const errorName =
+    err && typeof err === 'object' && 'name' in err
+      ? String((err as { name: unknown }).name)
+      : '';
 
   if (errorName === 'AbortError' || /abort|timed?\s*out/i.test(errorMessage)) {
     return new ApiError(
@@ -666,44 +671,50 @@ export async function* generateGeminiReplyStream({
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   let streamedAny = false;
   let primaryError: unknown = null;
+  const isVitest = Boolean(process.env.VITEST);
 
-  try {
-    const stream = await client.interactions.create(
-      {
-        model,
-        system_instruction: systemInstruction,
-        input: steps,
-        generation_config: {
-          thinking_level: 'minimal',
-          max_output_tokens: maxOutputTokens,
+  if (isVitest || interactionsUnsupportedKey !== apiKey) {
+    try {
+      const stream = await client.interactions.create(
+        {
+          model,
+          system_instruction: systemInstruction,
+          input: steps,
+          generation_config: {
+            thinking_level: 'minimal',
+            max_output_tokens: maxOutputTokens,
+          },
+          store: false,
+          stream: true,
         },
-        store: false,
-        stream: true,
-      },
-      {
-        signal: controller.signal,
-      }
-    );
+        {
+          signal: controller.signal,
+        }
+      );
 
-    for await (const event of stream) {
-      if (event.event_type === 'step.delta' && event.delta.type === 'text') {
-        const piece = event.delta.text;
-        if (piece) {
-          streamedAny = true;
-          yield piece;
+      for await (const event of stream) {
+        if (event.event_type === 'step.delta' && event.delta.type === 'text') {
+          const piece = event.delta.text;
+          if (piece) {
+            streamedAny = true;
+            yield piece;
+          }
         }
       }
-    }
 
-    if (streamedAny) {
-      clearTimeout(timeoutId);
-      return;
+      if (streamedAny) {
+        clearTimeout(timeoutId);
+        return;
+      }
+    } catch (err) {
+      primaryError = err;
+      const msg = normalizeError(err, '');
+      if (!isVitest && /404|not\s*found|unsupported|not\s*supported/i.test(msg)) {
+        interactionsUnsupportedKey = apiKey;
+      }
     }
-  } catch (err) {
-    primaryError = err;
   }
 
-  const isVitest = Boolean(process.env.VITEST);
   if (!streamedAny && !isVitest) {
     try {
       const restGenerator = streamStandardGeminiRestApi({
@@ -808,56 +819,63 @@ export async function generateGeminiReply({
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const interaction = await client.interactions.create(
-      {
-        model,
-        system_instruction: systemInstruction,
-        input: steps,
-        generation_config: {
-          thinking_level: 'minimal',
-          max_output_tokens: maxOutputTokens,
+    if (isVitest || interactionsUnsupportedKey !== apiKey) {
+      const interaction = await client.interactions.create(
+        {
+          model,
+          system_instruction: systemInstruction,
+          input: steps,
+          generation_config: {
+            thinking_level: 'minimal',
+            max_output_tokens: maxOutputTokens,
+          },
+          store: false,
         },
-        store: false,
-      },
-      {
-        signal: controller.signal,
-      }
-    );
-
-    if (interaction.status === 'failed' || interaction.status === 'cancelled') {
-      throw new ApiError(
-        502,
-        'AI response could not be generated. Please try again.',
-        'GEMINI_GENERATION_FAILED'
+        {
+          signal: controller.signal,
+        }
       );
-    }
 
-    let outputText = interaction.output_text?.trim() ?? '';
+      if (interaction.status === 'failed' || interaction.status === 'cancelled') {
+        throw new ApiError(
+          502,
+          'AI response could not be generated. Please try again.',
+          'GEMINI_GENERATION_FAILED'
+        );
+      }
 
-    if (!outputText && Array.isArray(interaction.steps)) {
-      const textParts: string[] = [];
-      for (const step of interaction.steps) {
-        if (step.type === 'model_output' && Array.isArray(step.content)) {
-          for (const item of step.content) {
-            if (item.type === 'text' && typeof item.text === 'string') {
-              textParts.push(item.text);
+      let outputText = interaction.output_text?.trim() ?? '';
+
+      if (!outputText && Array.isArray(interaction.steps)) {
+        const textParts: string[] = [];
+        for (const step of interaction.steps) {
+          if (step.type === 'model_output' && Array.isArray(step.content)) {
+            for (const item of step.content) {
+              if (item.type === 'text' && typeof item.text === 'string') {
+                textParts.push(item.text);
+              }
             }
           }
         }
+        outputText = textParts.join('\n').trim();
       }
-      outputText = textParts.join('\n').trim();
-    }
 
-    if (!outputText) {
-      throw new ApiError(
-        502,
-        'AI response could not be generated. Please try rephrasing your message.',
-        'EMPTY_AI_RESPONSE'
-      );
-    }
+      if (!outputText) {
+        throw new ApiError(
+          502,
+          'AI response could not be generated. Please try rephrasing your message.',
+          'EMPTY_AI_RESPONSE'
+        );
+      }
 
-    return outputText;
+      return outputText;
+    }
+    throw new Error('404 interactions endpoint skipped for key');
   } catch (err: unknown) {
+    const errText = normalizeError(err, '');
+    if (!isVitest && /404|not\s*found|unsupported|not\s*supported/i.test(errText)) {
+      interactionsUnsupportedKey = apiKey;
+    }
     // Outside unit tests, try Google AI Studio generateContent REST models cleanly
     if (!isVitest) {
       const restResult = await tryStandardGeminiRestApi({
@@ -944,66 +962,71 @@ STRICT RULES:
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const isVitest = Boolean(process.env.VITEST);
 
   try {
     // 1. Try configured GEMINI_MODEL via Interactions API multimodal AudioContent
-    try {
-      const interaction = await client.interactions.create(
-        {
-          model,
-          input: [
-            {
-              type: 'audio',
-              data: audioBase64,
-              mime_type: cleanMime as 'audio/webm' | 'audio/mp4',
+    if (isVitest || interactionsUnsupportedKey !== apiKey) {
+      try {
+        const interaction = await client.interactions.create(
+          {
+            model,
+            input: [
+              {
+                type: 'audio',
+                data: audioBase64,
+                mime_type: cleanMime as 'audio/webm' | 'audio/mp4',
+              },
+              {
+                type: 'text',
+                text: transcriptionPrompt,
+              },
+            ],
+            generation_config: {
+              thinking_level: 'minimal',
+              max_output_tokens: 450,
             },
-            {
-              type: 'text',
-              text: transcriptionPrompt,
-            },
-          ],
-          generation_config: {
-            thinking_level: 'minimal',
-            max_output_tokens: 450,
+            store: false,
           },
-          store: false,
-        },
-        { signal: controller.signal }
-      );
+          { signal: controller.signal }
+        );
 
-      let text = interaction.output_text?.trim() ?? '';
-      if (!text && Array.isArray(interaction.steps)) {
-        const parts: string[] = [];
-        for (const step of interaction.steps) {
-          if (step.type === 'model_output' && Array.isArray(step.content)) {
-            for (const item of step.content) {
-              if (item.type === 'text' && typeof item.text === 'string') {
-                parts.push(item.text);
+        let text = interaction.output_text?.trim() ?? '';
+        if (!text && Array.isArray(interaction.steps)) {
+          const parts: string[] = [];
+          for (const step of interaction.steps) {
+            if (step.type === 'model_output' && Array.isArray(step.content)) {
+              for (const item of step.content) {
+                if (item.type === 'text' && typeof item.text === 'string') {
+                  parts.push(item.text);
+                }
               }
             }
           }
+          text = parts.join(' ').trim();
         }
-        text = parts.join(' ').trim();
-      }
 
-      if (text) {
-        if (text === '[UNCLEAR_AUDIO]') {
-          throw new ApiError(
-            422,
-            'No clear speech could be heard in your recording. Please try speaking closer to the microphone.',
-            'EMPTY_TRANSCRIPTION'
-          );
+        if (text) {
+          if (text === '[UNCLEAR_AUDIO]') {
+            throw new ApiError(
+              422,
+              'No clear speech could be heard in your recording. Please try speaking closer to the microphone.',
+              'EMPTY_TRANSCRIPTION'
+            );
+          }
+          return { transcript: text, provider: model };
         }
-        return { transcript: text, provider: model };
+      } catch (err) {
+        if (err instanceof ApiError && err.code === 'EMPTY_TRANSCRIPTION') {
+          throw err;
+        }
+        const errText = normalizeError(err, '');
+        if (!isVitest && /404|not\s*found|unsupported|not\s*supported/i.test(errText)) {
+          interactionsUnsupportedKey = apiKey;
+        }
+        // Fall through cleanly to Google AI Studio multimodal audio-capable models
       }
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'EMPTY_TRANSCRIPTION') {
-        throw err;
-      }
-      // Fall through cleanly to Google AI Studio multimodal audio-capable models
     }
-
-    const isVitest = Boolean(process.env.VITEST);
 
     // 2. Outside unit tests, fall back to Google AI Studio multimodal audio-capable models
     let lastStatus: number | undefined;
